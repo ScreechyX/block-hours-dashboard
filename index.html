@@ -825,11 +825,9 @@ function autoPopulateClientFields(rows) {
   const bsMatch = blockSummaryData.find(c => c.code === code) || null;
   const clMatch = clientData.find(c => c.code === code) || null;
 
-  const balanceVal = bsMatch !== null ? bsMatch.currentBalance : (clMatch !== null ? clMatch.blockHours : null);
-  if (balanceVal !== null) {
-    document.getElementById('hoursInput').value = balanceVal;
-    saveSettings();
-  }
+  const balanceVal = bsMatch !== null ? bsMatch.currentBalance : (clMatch !== null ? clMatch.blockHours : 0);
+  document.getElementById('hoursInput').value = balanceVal;
+  saveSettings();
 
   if (bsMatch) {
     document.getElementById('pendingInput').value = bsMatch.pendingInvoice !== null ? bsMatch.pendingInvoice : 0;
