@@ -891,6 +891,8 @@ function render() {
   if (isAllClients) {
     document.getElementById('periodBadge').textContent = detectPeriod(rows);
     document.getElementById('clientBadge').style.display = 'none';
+    document.getElementById('hoursInput').value = 0;
+    document.getElementById('pendingInput').value = 0;
     renderAllClientsView(rows);
     return;
   }
