@@ -412,6 +412,12 @@
         </div>
       </div>
 
+      <!-- Trend chart (shown when current month selected and history exists) -->
+      <div class="chart-card" id="trendCard" style="display:none; margin-bottom:20px;">
+        <h3>Monthly Usage Trend</h3>
+        <canvas id="trendChart" style="max-height:200px;"></canvas>
+      </div>
+
       <!-- Tables -->
       <div class="table-card">
         <div class="table-card-header">
@@ -442,6 +448,8 @@ let sortCol = 'charged';
 let sortDir = 'desc';
 let dailyChartInst = null;
 let staffChartInst = null;
+let trendChartInst = null;
+let monthlyHistory = {};
 let importHistory = [];
 
 // ── Safe storage wrapper (handles file://, private mode, blocked storage) ───────
@@ -483,6 +491,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (cd) { clientData = JSON.parse(cd); updateClientDbStatus(); }
   } catch(e) {
     store.del('bh_clientData');
+  }
+
+  try {
+    const mh = store.get('bh_monthlyHistory');
+    if (mh) monthlyHistory = JSON.parse(mh);
+  } catch(e) {
+    store.del('bh_monthlyHistory');
   }
 
   try {
@@ -696,11 +711,31 @@ function processFile(file) {
       renderHistory();
 
       rebuildFilters();
+      updateMonthlyHistory(rows);
       snapToCurrentMonth();
       applyFilters();
     } catch(ex) { alert('Error reading file: ' + ex.message); }
   };
   reader.readAsArrayBuffer(file);
+}
+
+// ── Monthly history accumulation ──────────────────────────────────────────────
+function updateMonthlyHistory(rows) {
+  const byClientMonth = {};
+  rows.forEach(r => {
+    const code = getClientCode(r.client);
+    const d = r.date instanceof Date ? r.date : new Date(r.date);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (!byClientMonth[code]) byClientMonth[code] = {};
+    byClientMonth[code][key] = (byClientMonth[code][key] || 0) + (r.charged ?? 0);
+  });
+  Object.entries(byClientMonth).forEach(([code, months]) => {
+    if (!monthlyHistory[code]) monthlyHistory[code] = {};
+    Object.entries(months).forEach(([k, v]) => {
+      monthlyHistory[code][k] = v;
+    });
+  });
+  store.set('bh_monthlyHistory', JSON.stringify(monthlyHistory));
 }
 
 // ── Parse rows ─────────────────────────────────────────────────────────────────
@@ -912,6 +947,10 @@ function render() {
   renderDailyChart(rows);
   renderStaffChart(rows);
 
+  // Trend chart (current month only, single client)
+  const clientCode = getClientCode(document.getElementById('clientFilter').value);
+  renderTrendChart(clientCode);
+
   // Table
   renderTable(rows);
 }
@@ -1114,6 +1153,96 @@ function renderStaffChart(rows) {
       plugins: {
         legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 10, padding: 6 } },
         tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw}h` } }
+      }
+    }
+  });
+}
+
+// ── Trend chart ────────────────────────────────────────────────────────────────
+function renderTrendChart(clientCode) {
+  const card = document.getElementById('trendCard');
+  const history = monthlyHistory[clientCode];
+
+  if (!history) { card.style.display = 'none'; return; }
+
+  const now = new Date();
+  const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  const pfEl = document.getElementById('periodFilter');
+  const selectedPeriod = pfEl ? pfEl.value : '';
+  if (selectedPeriod !== currentKey) { card.style.display = 'none'; return; }
+
+  const allKeys = Object.keys(history).sort();
+  if (allKeys.length < 2) { card.style.display = 'none'; return; }
+
+  card.style.display = 'block';
+
+  const labels = allKeys.map(k => {
+    const [y, m] = k.split('-');
+    return new Date(+y, +m - 1).toLocaleString('default', { month: 'short', year: '2-digit' });
+  });
+  const values = allKeys.map(k => Math.round(history[k] * 10) / 10);
+
+  const avg = values.reduce((a, b) => a + b, 0) / values.length;
+
+  // Linear regression
+  const n = values.length;
+  const xMean = (n - 1) / 2;
+  const yMean = avg;
+  const num = values.reduce((s, y, i) => s + (i - xMean) * (y - yMean), 0);
+  const den = values.reduce((s, _, i) => s + (i - xMean) ** 2, 0);
+  const slope = den ? num / den : 0;
+  const intercept = yMean - slope * xMean;
+  const trendValues = values.map((_, i) => Math.round((slope * i + intercept) * 10) / 10);
+
+  const barColors = allKeys.map(k => k === currentKey ? '#1e3a5f' : '#93c5fd');
+
+  if (trendChartInst) trendChartInst.destroy();
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  trendChartInst = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Hours Charged',
+          data: values,
+          backgroundColor: barColors,
+          borderRadius: 4,
+          order: 3
+        },
+        {
+          label: `Avg (${fmt(avg)}h)`,
+          data: Array(n).fill(Math.round(avg * 10) / 10),
+          type: 'line',
+          borderColor: '#f59e0b',
+          borderDash: [6, 3],
+          borderWidth: 2,
+          pointRadius: 0,
+          fill: false,
+          order: 1
+        },
+        {
+          label: 'Trend',
+          data: trendValues,
+          type: 'line',
+          borderColor: '#8b5cf6',
+          borderWidth: 2,
+          pointRadius: 0,
+          fill: false,
+          order: 2
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { labels: { font: { size: 11 }, boxWidth: 10, padding: 10 } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw}h` } }
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { font: { size: 11 } }, grid: { color: '#f1f5f9' } },
+        x: { ticks: { font: { size: 11 } }, grid: { display: false } }
       }
     }
   });
