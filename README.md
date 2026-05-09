@@ -18,7 +18,8 @@ Live at **[block.nightmareit.com](https://block.nightmareit.com)** (Cloudflare A
 - **Usage alerts** — colour-coded warnings at 50%, 75%, and 90% of block hours used
 - **Ticket flags** — highlights tickets over 10 charged hours (red) and tickets where worked hours don't match charged hours (yellow / unbilled)
 - **Run-rate forecasting** — projects end-of-month usage based on daily burn rate
-- **Persistent settings** — block hours balance, pending invoice, and monthly history are saved between sessions
+- **Import history** — the last 8 imported files are saved in the sidebar; click any entry to reload that import's data without re-importing the file
+- **Persistent settings** — block hours balance, pending invoice, monthly history, and import data are saved between sessions
 
 ## Usage
 
