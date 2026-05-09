@@ -451,6 +451,7 @@ let staffChartInst = null;
 let trendChartInst = null;
 let monthlyHistory = {};
 let importHistory = [];
+let activeHistoryTs = null;
 
 // ── Safe storage wrapper (handles file://, private mode, blocked storage) ───────
 const store = {
@@ -480,6 +481,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const hist = store.get('bh_history');
     if (hist) {
       importHistory = JSON.parse(hist);
+      if (importHistory.length) {
+        activeHistoryTs = importHistory[0].ts;
+        // Migrate: if newest entry has no stored rows, back-fill from bh_lastData
+        if (!store.get('bh_import_' + activeHistoryTs)) {
+          const lastData = store.get('bh_lastData');
+          if (lastData) store.set('bh_import_' + activeHistoryTs, lastData);
+        }
+      }
       renderHistory();
     }
   } catch(e) {
@@ -705,9 +714,15 @@ function processFile(file) {
 
       // Track history
       const period = detectPeriod(rows);
+      const serialised = rows.map(r => ({...r, date: r.date.toISOString()}));
       const entry = { name: file.name, period, count: rows.length, ts: Date.now() };
-      importHistory = [entry, ...importHistory.filter(h => h.name !== file.name)].slice(0, 8);
+      const pruned = importHistory.filter(h => h.name !== file.name);
+      const removed = pruned.slice(8 - 1); // entries that will fall off the end
+      removed.forEach(h => store.del('bh_import_' + h.ts));
+      importHistory = [entry, ...pruned].slice(0, 8);
+      store.set('bh_import_' + entry.ts, JSON.stringify(serialised));
       store.set('bh_history', JSON.stringify(importHistory));
+      activeHistoryTs = entry.ts;
       renderHistory();
 
       rebuildFilters();
@@ -1456,14 +1471,29 @@ function renderHistory() {
   const list    = document.getElementById('historyList');
   if (importHistory.length === 0) { section.style.display = 'none'; return; }
   section.style.display = 'block';
-  list.innerHTML = importHistory.map((h, i) => `
-    <li class="${i === 0 ? 'active' : ''}">
+  list.innerHTML = importHistory.map(h => `
+    <li class="${h.ts === activeHistoryTs ? 'active' : ''}" onclick="loadHistoryEntry(${h.ts})">
       <div class="dot"></div>
       <div>
         <div style="font-weight:600;font-size:11px">${esc(h.period)}</div>
         <div style="color:#94a3b8;font-size:10px">${h.count} entries · ${esc(h.name)}</div>
       </div>
     </li>`).join('');
+}
+
+function loadHistoryEntry(ts) {
+  const raw = store.get('bh_import_' + ts);
+  if (!raw) { alert('Stored data for this import is no longer available. Please re-import the file.'); return; }
+  try {
+    const rows = JSON.parse(raw);
+    rows.forEach(r => r.date = new Date(r.date));
+    allRows = rows;
+    activeHistoryTs = ts;
+    renderHistory();
+    rebuildFilters();
+    snapToCurrentMonth();
+    applyFilters();
+  } catch(e) { alert('Could not load import: ' + e.message); }
 }
 
 // ── Utils ──────────────────────────────────────────────────────────────────────
