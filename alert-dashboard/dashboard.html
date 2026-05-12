@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Alert Intelligence Dashboard</title>
+<title>Alert Intelligence Dashboard — EML</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -29,10 +29,21 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
 .btn-primary{background:#3b82f6;color:#fff}.btn-primary:hover{background:#2563eb}
 .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover{color:var(--text);border-color:#4b5563}
 
+/* Status bar */
+.sbar{background:rgba(30,41,59,.9);border-bottom:1px solid var(--border);padding:6px 24px;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);position:sticky;top:60px;z-index:99}
+.sbar.hidden{display:none}
+.sdot{width:7px;height:7px;border-radius:50%;background:#22c55e;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.sdot.active{animation:pulse 2s infinite}
+.sdot.scanning{background:#f97316;animation:pulse .7s infinite}
+.sbar-folder{color:var(--text);font-weight:600;max-width:400px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sbar-sp{flex:1}
+.sbar-countdown{font-size:11px;color:#475569}
+
 /* Welcome */
 .welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(100vh - 60px);padding:40px;text-align:center}
 .welcome-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px 48px;max-width:520px;width:100%}
-.welcome-card svg{width:52px;height:52px;color:#334155;margin:0 auto 20px;display:block}
+.welcome-card svg.hero{width:52px;height:52px;color:#334155;margin:0 auto 20px;display:block}
 .welcome-card h2{font-size:22px;font-weight:700;margin-bottom:10px}
 .welcome-card p{color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:28px}
 .steps{text-align:left;background:var(--bg);border-radius:10px;padding:16px 20px;margin-bottom:24px}
@@ -41,11 +52,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
 .step-n{background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px}
 .step-t{color:var(--text);line-height:1.5}
 .step-t code{background:rgba(59,130,246,.15);color:#93c5fd;border-radius:4px;padding:1px 6px;font-size:12px}
-.drop-zone{border:2px dashed var(--border);border-radius:10px;padding:28px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:4px}
-.drop-zone:hover,.drop-zone.over{border-color:#3b82f6;background:rgba(59,130,246,.06)}
-.drop-zone svg{width:32px;height:32px;color:var(--muted);margin-bottom:10px}
-.drop-zone p{font-size:13px;color:var(--muted)}.drop-zone strong{color:var(--text)}
-.fname{color:#60a5fa;font-size:12px;margin-top:6px;font-weight:600}
+.compat-warn{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 14px;font-size:12px;color:#fca5a5;margin-bottom:16px;display:none;text-align:left}
 
 /* Dashboard */
 .page{padding:22px;max-width:1700px;margin:0 auto}
@@ -60,6 +67,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
 .scard.low{border-color:var(--low)}.scard.low .n{color:var(--low)}
 .scard.info{border-color:var(--info)}.scard.info .n{color:var(--info)}
 .scard.resolved{border-color:#10b981}.scard.resolved .n{color:#34d399}
+.scard.auto-resolved{border-color:#0891b2}.scard.auto-resolved .n{color:#22d3ee}
 
 .grid{display:grid;grid-template-columns:360px 1fr;gap:18px}
 @media(max-width:1100px){.grid{grid-template-columns:1fr}}
@@ -69,7 +77,10 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
 .ph h2{font-size:14px;font-weight:700;flex:1}
 .ph .badge{background:var(--critical);color:#fff;border-radius:100px;padding:2px 8px;font-size:11px;font-weight:700}
 
-.plist{overflow-y:auto;max-height:620px}
+.plist{overflow-y:auto}
+#pqPanel{display:flex;flex-direction:column;overflow:hidden}
+#pqPanel .plist{overflow-y:auto}
+.grp-badge{background:rgba(139,92,246,.2);color:#a78bfa;border:1px solid rgba(139,92,246,.3);border-radius:100px;padding:1px 7px;font-size:10px;font-weight:700;white-space:nowrap;flex-shrink:0}
 .pi{padding:13px 18px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .15s}
 .pi:hover{background:var(--surface2)}.pi:last-child{border-bottom:none}
 .pi.sel{background:rgba(59,130,246,.08);border-left:2px solid #3b82f6}
@@ -78,7 +89,6 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--te
 .pi-meta{font-size:11px;color:var(--muted)}
 .pi-action{font-size:11px;color:#60a5fa;margin-top:3px}
 .udot{width:7px;height:7px;border-radius:50%;background:var(--critical);flex-shrink:0;margin-top:3px;animation:pulse 1.4s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
 
 .sev{padding:2px 7px;border-radius:5px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;flex-shrink:0}
 .sev-critical{background:var(--critical-bg);color:var(--critical);border:1px solid var(--critical-bd)}
@@ -111,7 +121,6 @@ tr.sel td{background:rgba(59,130,246,.06)}
 .chip{background:rgba(255,255,255,.07);border-radius:5px;padding:2px 7px;font-size:11px;white-space:nowrap}
 .ui{color:var(--critical)}
 .empty{text-align:center;padding:50px;color:var(--muted)}
-/* Resolved-by-user styling */
 tr.user-resolved td{opacity:.45}
 tr.user-resolved .td-s strong{text-decoration:line-through}
 .pi.user-resolved{opacity:.4}
@@ -131,7 +140,6 @@ tr.user-resolved .td-s strong{text-decoration:line-through}
 .pgbtn{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 11px;color:var(--text);font-size:12px;cursor:pointer}
 .pgbtn:hover{border-color:#4b5563}.pgbtn:disabled{opacity:.3;cursor:not-allowed}
 
-/* Detail modal */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:200}
 .overlay.hidden{display:none}
 .dm{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:640px;max-width:95vw;max-height:85vh;overflow-y:auto}
@@ -153,6 +161,27 @@ tr.user-resolved .td-s strong{text-decoration:line-through}
 .abox p{font-size:13px;color:#86efac}
 .urg-banner{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;font-weight:600;color:var(--critical)}
 .res-banner{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;font-weight:600;color:#34d399}
+
+/* Checkboxes & selection */
+input[type=checkbox]{accent-color:#3b82f6;width:14px;height:14px;cursor:pointer;vertical-align:middle}
+th.cb-col,td.cb-col{width:36px;padding:8px 8px 8px 14px}
+tr.tbl-sel td{background:rgba(59,130,246,.1)!important}
+
+/* Bulk action bar */
+.bulk-bar{padding:9px 18px;display:flex;align-items:center;gap:10px;background:rgba(59,130,246,.07);border-bottom:1px solid rgba(59,130,246,.18)}
+.bulk-bar.hidden{display:none}
+.bulk-count{font-size:13px;color:var(--text);font-weight:600;flex:1}
+.btn-sm{padding:5px 13px;font-size:12px}
+
+/* Resolved section */
+.res-section{margin-top:18px;background:var(--surface);border-radius:12px;border:1px solid var(--border);overflow:hidden}
+.res-hdr{padding:13px 18px;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;transition:background .15s}
+.res-hdr:hover{background:var(--surface2)}
+.res-hdr h2{font-size:14px;font-weight:700;flex:1}
+.res-badge{background:#10b981;color:#fff;border-radius:100px;padding:2px 8px;font-size:11px;font-weight:700;margin-left:6px}
+.res-chevron{transition:transform .2s;color:var(--muted)}
+.res-chevron.open{transform:rotate(180deg)}
+.res-body{border-top:1px solid var(--border)}
 </style>
 </head>
 <body>
@@ -161,18 +190,33 @@ tr.user-resolved .td-s strong{text-decoration:line-through}
   <div class="logo-icon">
     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
   </div>
-  <div class="logo"><h1>Alert Intelligence</h1><span>PST Email Analyser</span></div>
+  <div class="logo"><h1>Alert Intelligence</h1><span>EML Folder Monitor</span></div>
   <div class="hdr-space"></div>
+  <button class="btn btn-ghost" id="btnRefresh" style="display:none" onclick="refreshFolder()">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+    Refresh
+  </button>
   <button class="btn btn-ghost" id="btnClear" style="display:none" onclick="clearAll()">
     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
     Clear
   </button>
-  <label class="btn btn-primary" style="cursor:pointer">
-    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-    Load Alerts
-    <input type="file" id="jsonInput" accept=".json" style="display:none" onchange="loadFile(this)">
-  </label>
+  <button class="btn btn-primary" id="btnFolder" onclick="selectFolder()">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
+    Select Folder
+  </button>
 </header>
+
+<!-- Monitoring status bar -->
+<div class="sbar hidden" id="sbar">
+  <span class="sdot active" id="sdot"></span>
+  <span>Monitoring</span>
+  <span class="sbar-folder" id="sbarFolder"></span>
+  <span style="color:var(--border)">·</span>
+  <span id="sbarCount"></span>
+  <span class="sbar-sp"></span>
+  <span id="sbarTime" style="font-size:11px;color:var(--muted)"></span>
+  <span class="sbar-countdown" id="sbarCountdown"></span>
+</div>
 
 <!-- Detail overlay -->
 <div class="overlay hidden" id="detailOverlay" onclick="closeDetailBg(event)">
@@ -183,19 +227,21 @@ tr.user-resolved .td-s strong{text-decoration:line-through}
   <!-- Welcome -->
   <div class="welcome" id="welcome">
     <div class="welcome-card">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      <svg class="hero" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
       <h2>Alert Intelligence</h2>
-      <p>Analyse and triage alert emails from an Outlook PST file. Fully local — no API key or internet connection required.</p>
+      <p>Point the dashboard at a folder of <code style="background:rgba(59,130,246,.15);color:#93c5fd;border-radius:4px;padding:1px 6px;font-size:12px">.eml</code> files and it will analyse and triage your alert emails automatically — no PST export or JSON conversion required.</p>
       <div class="steps">
-        <div class="step"><div class="step-n">1</div><div class="step-t">Run <code>extract.ps1</code> — it opens a file picker, reads your PST via Outlook, and saves <code>alerts.json</code></div></div>
-        <div class="step"><div class="step-n">2</div><div class="step-t">Click <strong>Load Alerts</strong> above and select the generated <code>alerts.json</code> file</div></div>
-        <div class="step"><div class="step-n">3</div><div class="step-t">Browse, filter, and action your prioritised alert queue</div></div>
+        <div class="step"><div class="step-n">1</div><div class="step-t">Click <strong>Select Folder</strong> and choose the folder containing your <code>.eml</code> alert emails</div></div>
+        <div class="step"><div class="step-n">2</div><div class="step-t">The dashboard reads every <code>.eml</code> file, analyses severity, and builds your priority queue</div></div>
+        <div class="step"><div class="step-n">3</div><div class="step-t">Auto-refreshes every 60 seconds — new files saved to the folder appear automatically</div></div>
       </div>
-      <div class="drop-zone" id="drop" onclick="document.getElementById('jsonInput').click()">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-        <p><strong>Drop alerts.json here</strong> or click to browse</p>
-        <p class="fname" id="fname"></p>
+      <div id="compatWarn" class="compat-warn">
+        <strong>Browser not supported.</strong> The Folder Access API requires Chrome 86+ or Edge 86+. Please open this page in a recent version of Chrome or Edge.
       </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px 16px" onclick="selectFolder()">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
+        Select EML Folder
+      </button>
     </div>
   </div>
 
@@ -203,7 +249,7 @@ tr.user-resolved .td-s strong{text-decoration:line-through}
   <div class="page" id="dash" style="display:none">
     <div class="srow" id="srow"></div>
     <div class="grid">
-      <div class="panel">
+      <div class="panel" id="pqPanel">
         <div class="ph">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:15px;height:15px;color:var(--critical)"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
           <h2>Priority Queue</h2>
@@ -216,7 +262,7 @@ tr.user-resolved .td-s strong{text-decoration:line-through}
           <div class="cpanel"><h3>By Severity</h3><div class="cwrap"><canvas id="sevChart"></canvas></div></div>
           <div class="cpanel"><h3>By Category</h3><div class="cwrap"><canvas id="catChart"></canvas></div></div>
         </div>
-        <div class="panel">
+        <div class="panel" id="alertsPanel">
           <div class="tbar">
             <h2>All Alerts</h2>
             <input class="srch" type="text" placeholder="Search…" id="srch" oninput="filter()">
@@ -229,16 +275,20 @@ tr.user-resolved .td-s strong{text-decoration:line-through}
               <option value="info">Info</option>
             </select>
             <select class="fsel" id="fCat" onchange="filter()"></select>
-            <select class="fsel" id="fRes" onchange="filter()">
-              <option value="">All states</option>
-              <option value="active">Active only</option>
-              <option value="resolved">Resolved only</option>
-            </select>
+          </div>
+          <div class="bulk-bar hidden" id="bulkBar">
+            <span class="bulk-count" id="bulkCount"></span>
+            <button class="btn btn-primary btn-sm" onclick="resolveSelected()">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:13px;height:13px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              Resolve Selected
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="clearSelection()">Cancel</button>
           </div>
           <div class="twrap">
             <table>
               <thead><tr>
-                <th style="width:20px"></th><th>Severity</th><th>Subject</th>
+                <th class="cb-col"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)" title="Select all on page"></th>
+                <th>Severity</th><th>Subject</th>
                 <th>System</th><th>Category</th><th>Recommended Action</th><th>Date</th><th></th>
               </tr></thead>
               <tbody id="tbody"></tbody>
@@ -252,58 +302,402 @@ tr.user-resolved .td-s strong{text-decoration:line-through}
         </div>
       </div>
     </div>
+
+    <!-- Resolved section -->
+    <div class="res-section" id="resSection" style="display:none">
+      <div class="res-hdr" onclick="toggleResolvedPanel()">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:15px;height:15px;color:#10b981"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <h2>Resolved <span class="res-badge" id="resBadge">0</span></h2>
+        <svg class="res-chevron" id="resChevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </div>
+      <div class="res-body" id="resBody" style="display:none">
+        <div class="twrap">
+          <table>
+            <thead><tr>
+              <th>Severity</th><th>Subject</th><th>System</th><th>Category</th><th>Date</th><th></th>
+            </tr></thead>
+            <tbody id="resTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 </main>
 
 <script>
 const PER_PAGE = 25;
-let allAlerts = [], filtered = [], page = 0;
-let sevChart = null, catChart = null, selId = null;
+const REFRESH_INTERVAL = 60; // seconds
 
-// ── Resolved state (persisted to localStorage) ─────────────────
+let allAlerts = [], filtered = [], page = 0;
+let resolvedAlerts = [], resolvedPanelOpen = false;
+let selectedIds = new Set();
+let sevChart = null, catChart = null, selId = null;
+let watchHandle = null, watchInterval = null, countdownInterval = null;
+let isScanning = false, nextRefreshAt = null;
+
 const LS_KEY = 'alert-dashboard-resolved';
 let resolvedIds = new Set(JSON.parse(localStorage.getItem(LS_KEY) || '[]'));
 
-function saveResolved() {
-  localStorage.setItem(LS_KEY, JSON.stringify([...resolvedIds]));
+function saveResolved() { localStorage.setItem(LS_KEY, JSON.stringify([...resolvedIds])); }
+
+async function ensureWritePermission() {
+  if (!watchHandle) return false;
+  try {
+    const cur = await watchHandle.queryPermission({ mode: 'readwrite' });
+    if (cur === 'granted') return true;
+    const req = await watchHandle.requestPermission({ mode: 'readwrite' });
+    return req === 'granted';
+  } catch {
+    return false;
+  }
+}
+
+async function moveFileToResolved(id, { skipRender = false } = {}) {
+  const rec = allAlerts.find(a => a.id === id);
+  if (!rec || !rec.filename || !watchHandle) return false;
+  try {
+    const resolvedDir = await watchHandle.getDirectoryHandle('Resolved', { create: true });
+    const srcHandle   = await watchHandle.getFileHandle(rec.filename);
+    const file        = await srcHandle.getFile();
+    const buf         = await file.arrayBuffer();
+    const destHandle  = await resolvedDir.getFileHandle(rec.filename, { create: true });
+    const writable    = await destHandle.createWritable();
+    await writable.write(buf);
+    await writable.close();
+    await watchHandle.removeEntry(rec.filename);
+    allAlerts = allAlerts.filter(a => a.id !== id);
+    resolvedIds.delete(id);
+    saveResolved();
+    if (!skipRender) {
+      if (selId === id) { document.getElementById('detailOverlay').classList.add('hidden'); selId = null; }
+      buildSummary(); buildCharts(); buildPriority(); populateFilters(); filter();
+    }
+    return true;
+  } catch (e) {
+    console.error('Move to Resolved failed:', e);
+    if (!skipRender) window.alert('Could not move file to Resolved folder: ' + e.message);
+    return false;
+  }
 }
 
 function toggleResolved(id, event) {
   if (event) event.stopPropagation();
-  if (resolvedIds.has(id)) resolvedIds.delete(id);
-  else resolvedIds.add(id);
-  saveResolved();
-  buildSummary();
-  buildPriority();
-  renderTable();
-  if (selId == id) selectAlert(id);
+  moveFileToResolved(id);
 }
 
-// ── File loading ───────────────────────────────────────────────
-const drop = document.getElementById('drop');
-drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
-drop.addEventListener('dragleave', () => drop.classList.remove('over'));
-drop.addEventListener('drop', e => {
-  e.preventDefault(); drop.classList.remove('over');
-  const f = e.dataTransfer.files[0];
-  if (f && f.name.endsWith('.json')) readJsonFile(f);
-});
+// ── Selection & bulk resolve ───────────────────────────────────
+function toggleSelect(id, event) {
+  if (event) event.stopPropagation();
+  if (selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id);
+  updateBulkBar();
+}
 
-function loadFile(input) { if (input.files[0]) readJsonFile(input.files[0]); }
+function toggleSelectAll(checked) {
+  const page_items = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
+  page_items.forEach(a => checked ? selectedIds.add(a.id) : selectedIds.delete(a.id));
+  updateBulkBar();
+  renderTable();
+}
 
-function readJsonFile(file) {
-  document.getElementById('fname').textContent = file.name;
-  const reader = new FileReader();
-  reader.onload = e => {
+function clearSelection() {
+  selectedIds.clear();
+  updateBulkBar();
+  renderTable();
+}
+
+function updateBulkBar() {
+  const n = selectedIds.size;
+  document.getElementById('bulkBar').classList.toggle('hidden', n === 0);
+  document.getElementById('bulkCount').textContent = `${n} alert${n === 1 ? '' : 's'} selected`;
+  const sa = document.getElementById('selectAll');
+  if (sa) {
+    const page_items = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
+    sa.checked = page_items.length > 0 && page_items.every(a => selectedIds.has(a.id));
+    sa.indeterminate = !sa.checked && page_items.some(a => selectedIds.has(a.id));
+  }
+}
+
+async function resolveSelected() {
+  const ids = [...selectedIds];
+  if (!ids.length) return;
+  if (!await ensureWritePermission()) {
+    window.alert('Write permission is required.\nPlease click "Clear", re-select the folder, and grant write access when prompted.');
+    return;
+  }
+  selectedIds.clear();
+  updateBulkBar();
+  let failed = 0;
+  for (const id of ids) {
+    const ok = await moveFileToResolved(id, { skipRender: true });
+    if (!ok) failed++;
+  }
+  if (selId && !allAlerts.find(a => a.id === selId)) {
+    document.getElementById('detailOverlay').classList.add('hidden');
+    selId = null;
+  }
+  buildSummary(); buildCharts(); buildPriority(); populateFilters(); filter();
+  if (failed) window.alert(`${failed} file(s) could not be moved to the Resolved folder.`);
+}
+
+// ── Browser compatibility check ────────────────────────────────
+if (!('showDirectoryPicker' in window)) {
+  document.getElementById('compatWarn').style.display = 'block';
+}
+
+// ── Stable numeric ID from filename ───────────────────────────
+function strHash(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = Math.imul(31, h) + s.charCodeAt(i) | 0;
+  return Math.abs(h);
+}
+
+
+// ── Folder selection ───────────────────────────────────────────
+async function selectFolder() {
+  if (!('showDirectoryPicker' in window)) {
+    alert('Your browser does not support the Folder Access API.\nPlease use Chrome 86+ or Edge 86+.');
+    return;
+  }
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    watchHandle = handle;
+    document.getElementById('sbarFolder').textContent = handle.name;
+    document.getElementById('sbar').classList.remove('hidden');
+    document.getElementById('btnRefresh').style.display = '';
+    document.getElementById('btnClear').style.display = '';
+    document.getElementById('btnFolder').style.display = 'none';
+    await scanFolder();
+    startAutoRefresh();
+  } catch (e) {
+    if (e.name !== 'AbortError') alert('Could not open folder: ' + e.message);
+  }
+}
+
+async function refreshFolder() {
+  if (!watchHandle || isScanning) return;
+  stopAutoRefresh();
+  await scanFolder();
+  startAutoRefresh();
+}
+
+// ── EML parser ─────────────────────────────────────────────────
+function decodeEncodedWords(str) {
+  return (str || '').replace(/=\?([^?]+)\?([BQbq])\?([^?]*)\?=/g, (_, charset, enc, text) => {
     try {
-      const raw = JSON.parse(e.target.result);
-      if (!Array.isArray(raw)) throw new Error('Expected a JSON array');
-      loadData(raw);
-    } catch (err) {
-      alert('Could not read file: ' + err.message);
+      if (enc.toUpperCase() === 'B') {
+        const bytes = Uint8Array.from(atob(text), c => c.charCodeAt(0));
+        return new TextDecoder(charset).decode(bytes);
+      }
+      return text.replace(/_/g, ' ').replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+    } catch { return text; }
+  });
+}
+
+function decodeTransferEncoding(body, cte) {
+  const enc = (cte || '').trim().toLowerCase();
+  if (enc === 'base64') {
+    try {
+      const bytes = Uint8Array.from(atob(body.replace(/\s+/g, '')), c => c.charCodeAt(0));
+      return new TextDecoder('utf-8').decode(bytes);
+    } catch { return body; }
+  }
+  if (enc === 'quoted-printable') {
+    return body.replace(/=\r?\n/g, '').replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+  }
+  return body;
+}
+
+function parseEml(text) {
+  const norm = text.replace(/\r\n/g, '\n');
+  const split = norm.indexOf('\n\n');
+  const headerText = split !== -1 ? norm.substring(0, split) : norm;
+  let bodyText = split !== -1 ? norm.substring(split + 2) : '';
+
+  // Unfold continuation lines
+  const unfolded = headerText.replace(/\n[ \t]+/g, ' ');
+
+  const headers = {};
+  for (const line of unfolded.split('\n')) {
+    const colon = line.indexOf(':');
+    if (colon < 1) continue;
+    const key = line.substring(0, colon).toLowerCase().trim();
+    if (!(key in headers)) headers[key] = line.substring(colon + 1).trim();
+  }
+
+  const subject = decodeEncodedWords(headers['subject'] || '');
+  const from    = decodeEncodedWords(headers['from']    || '');
+  const date    = headers['date'] || null;
+  const ct      = headers['content-type'] || '';
+  const cte     = headers['content-transfer-encoding'] || '';
+
+  // Extract plain text from multipart
+  const boundaryMatch = ct.match(/boundary=["']?([^"';\s]+)["']?/i);
+  if (boundaryMatch) {
+    const boundary = '--' + boundaryMatch[1];
+    const escaped  = boundary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const parts    = bodyText.split(new RegExp('(?:^|\n)' + escaped + '(?:--)?(?:\n|$)', 'g'));
+    for (const part of parts) {
+      const ps = part.indexOf('\n\n');
+      if (ps === -1) continue;
+      const ph = part.substring(0, ps).toLowerCase();
+      const pb = part.substring(ps + 2);
+      if (ph.includes('text/plain')) {
+        const partCte = (ph.match(/content-transfer-encoding:\s*(\S+)/i) || [])[1] || '';
+        bodyText = decodeTransferEncoding(pb, partCte);
+        break;
+      }
     }
-  };
-  reader.readAsText(file);
+  } else {
+    bodyText = decodeTransferEncoding(bodyText, cte);
+  }
+
+  return { subject, from, date, body: bodyText.trim() };
+}
+
+// ── Scan folder for .eml files ─────────────────────────────────
+async function scanFolder() {
+  if (isScanning || !watchHandle) return;
+  isScanning = true;
+
+  const dot = document.getElementById('sdot');
+  dot.classList.remove('active');
+  dot.classList.add('scanning');
+  document.getElementById('sbarTime').textContent = 'Scanning…';
+  document.getElementById('sbarCountdown').textContent = '';
+
+  const emails = [];
+  try {
+    for await (const [name, entry] of watchHandle.entries()) {
+      if (entry.kind !== 'file' || !name.toLowerCase().endsWith('.eml')) continue;
+      try {
+        const file = await entry.getFile();
+        const text = await file.text();
+        const info = parseEml(text);
+        emails.push({
+          id:       strHash(name),
+          filename: name,
+          subject:  info.subject || name.replace(/\.eml$/i, ''),
+          sender:   info.from,
+          date:     info.date ? new Date(info.date).toISOString() : null,
+          body:     info.body,
+          folder:   watchHandle.name,
+        });
+      } catch (err) {
+        console.warn('Skipped (parse error):', name, err);
+      }
+    }
+  } catch (e) {
+    console.error('Folder scan error:', e);
+  }
+
+  emails.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+  // Scan Resolved/ subfolder
+  const resolved = [];
+  try {
+    const resolvedDir = await watchHandle.getDirectoryHandle('Resolved');
+    for await (const [name, entry] of resolvedDir.entries()) {
+      if (entry.kind !== 'file' || !name.toLowerCase().endsWith('.eml')) continue;
+      try {
+        const file = await entry.getFile();
+        const text = await file.text();
+        const info = parseEml(text);
+        resolved.push({
+          id:       strHash('r:' + name),
+          filename: name,
+          subject:  info.subject || name.replace(/\.eml$/i, ''),
+          sender:   info.from,
+          date:     info.date ? new Date(info.date).toISOString() : null,
+          body:     info.body,
+          folder:   'Resolved',
+        });
+      } catch {}
+    }
+  } catch {} // Resolved folder doesn't exist yet — that's fine
+  resolved.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+  const t = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  document.getElementById('sbarCount').textContent = `${emails.length} active · ${resolved.length} resolved`;
+  document.getElementById('sbarTime').textContent  = `Last scan: ${t}`;
+  dot.classList.remove('scanning');
+  dot.classList.add('active');
+
+  isScanning = false;
+  loadData(emails, resolved);
+}
+
+// ── Auto-refresh with countdown ────────────────────────────────
+function startAutoRefresh() {
+  stopAutoRefresh();
+  nextRefreshAt = Date.now() + REFRESH_INTERVAL * 1000;
+
+  watchInterval = setInterval(async () => {
+    await scanFolder();
+    nextRefreshAt = Date.now() + REFRESH_INTERVAL * 1000;
+  }, REFRESH_INTERVAL * 1000);
+
+  countdownInterval = setInterval(() => {
+    if (!nextRefreshAt) return;
+    const secs = Math.max(0, Math.round((nextRefreshAt - Date.now()) / 1000));
+    document.getElementById('sbarCountdown').textContent = `· refresh in ${secs}s`;
+  }, 1000);
+}
+
+function stopAutoRefresh() {
+  clearInterval(watchInterval);
+  clearInterval(countdownInterval);
+  watchInterval = countdownInterval = null;
+  nextRefreshAt = null;
+  document.getElementById('sbarCountdown').textContent = '';
+}
+
+// ── Load and render ────────────────────────────────────────────
+function loadData(raw, rawResolved = []) {
+  const sevOrd = { critical:0, high:1, medium:2, low:3, info:4 };
+  allAlerts = raw.map(e => {
+    const r = analyzeEmail(e);
+    return {
+      id: e.id, filename: e.filename || null,
+      subject: e.subject || '(no subject)', sender: e.sender || '',
+      date: e.date || null, folder: e.folder || '', bodyPreview: (e.body || '').substring(0, 400),
+      severity: r.sev, category: r.cat, affectedSystem: r.sys,
+      summary: r.summary, action: r.action, urgent: r.urgent,
+      tags: r.tags, isResolved: r.isResolved,
+    };
+  }).sort((a, b) => {
+    if (a.urgent !== b.urgent) return a.urgent ? -1 : 1;
+    return (sevOrd[a.severity] ?? 5) - (sevOrd[b.severity] ?? 5);
+  });
+
+  resolvedAlerts = rawResolved.map(e => {
+    const r = analyzeEmail(e);
+    return { id: e.id, filename: e.filename, subject: e.subject || '(no subject)',
+      sender: e.sender || '', date: e.date || null, severity: r.sev,
+      category: r.cat, affectedSystem: r.sys };
+  });
+
+  document.getElementById('welcome').style.display = 'none';
+  document.getElementById('dash').style.display = '';
+  buildSummary(); buildCharts(); buildPriority(); populateFilters(); filter();
+  renderResolvedPanel();
+  requestAnimationFrame(syncPqHeight);
+}
+
+function clearAll() {
+  if (!confirm('Stop monitoring and clear all alerts?')) return;
+  stopAutoRefresh();
+  watchHandle = null; allAlerts = []; filtered = []; resolvedAlerts = [];
+  selectedIds.clear();
+  document.getElementById('btnRefresh').style.display = 'none';
+  document.getElementById('btnClear').style.display = 'none';
+  document.getElementById('btnFolder').style.display = '';
+  document.getElementById('dash').style.display = 'none';
+  document.getElementById('welcome').style.display = '';
+  document.getElementById('sbar').classList.add('hidden');
+  document.getElementById('bulkBar').classList.add('hidden');
+  document.getElementById('resSection').style.display = 'none';
+  if (sevChart) { sevChart.destroy(); sevChart = null; }
+  if (catChart) { catChart.destroy(); catChart = null; }
 }
 
 // ── Rule-based analysis ────────────────────────────────────────
@@ -342,7 +736,7 @@ function analyzeEmail(email) {
   else if (isPower)                                          { sev='high';   urgent=true; }
   else if (isPRTG)                                           { sev='medium'; urgent=false; }
   else if (isCrashPlan) {
-    const bad = /fail|error/i.test(body+subj);
+    const bad = /fail|error/i.test(body + subj);
     sev = bad ? 'medium' : 'low'; urgent = bad;
   }
   else if (isLogwatch)                                       { sev='info';   urgent=false; }
@@ -430,40 +824,7 @@ function extractSystem(subj) {
   return 'Unknown';
 }
 
-// ── Load and render ────────────────────────────────────────────
-function loadData(raw) {
-  const sevOrd = { critical:0, high:1, medium:2, low:3, info:4 };
-  allAlerts = raw.map(e => {
-    const r = analyzeEmail(e);
-    return {
-      id: e.id, subject: e.subject||'(no subject)', sender: e.sender||'',
-      date: e.date||null, folder: e.folder||'', bodyPreview: (e.body||'').substring(0,400),
-      severity: r.sev, category: r.cat, affectedSystem: r.sys,
-      summary: r.summary, action: r.action, urgent: r.urgent,
-      tags: r.tags, isResolved: r.isResolved,
-    };
-  }).sort((a,b) => {
-    if (a.urgent !== b.urgent) return a.urgent ? -1 : 1;
-    return (sevOrd[a.severity]??5) - (sevOrd[b.severity]??5);
-  });
-
-  document.getElementById('btnClear').style.display='';
-  document.getElementById('welcome').style.display='none';
-  document.getElementById('dash').style.display='';
-  buildSummary(); buildCharts(); buildPriority(); populateFilters(); filter();
-}
-
-function clearAll() {
-  if (!confirm('Clear all loaded alerts?')) return;
-  allAlerts=[]; filtered=[];
-  document.getElementById('btnClear').style.display='none';
-  document.getElementById('dash').style.display='none';
-  document.getElementById('welcome').style.display='';
-  document.getElementById('fname').textContent='';
-  if(sevChart){sevChart.destroy();sevChart=null;}
-  if(catChart){catChart.destroy();catChart=null;}
-}
-
+// ── Summary cards ──────────────────────────────────────────────
 function buildSummary() {
   const c={critical:0,high:0,medium:0,low:0,info:0}; let res=0, userRes=0;
   allAlerts.forEach(a=>{
@@ -478,7 +839,8 @@ function buildSummary() {
     <div class="scard medium"><div class="n">${c.medium}</div><div class="l">Medium</div></div>
     <div class="scard low"><div class="n">${c.low}</div><div class="l">Low</div></div>
     <div class="scard info"><div class="n">${c.info}</div><div class="l">Info</div></div>
-    <div class="scard resolved"><div class="n">${res + userRes}</div><div class="l">Resolved</div></div>`;
+    <div class="scard auto-resolved"><div class="n">${res}</div><div class="l">Auto Resolved</div></div>
+    <div class="scard resolved"><div class="n">${resolvedAlerts.length}</div><div class="l">Resolved</div></div>`;
 }
 
 function buildCharts() {
@@ -501,34 +863,90 @@ function buildCharts() {
 }
 
 function buildPriority() {
-  const urgent = allAlerts.filter(a => (a.urgent || a.severity === 'critical') && !resolvedIds.has(a.id));
-  const resolvedCount = allAlerts.filter(a => (a.urgent || a.severity === 'critical') && resolvedIds.has(a.id)).length;
-  document.getElementById('urgBadge').textContent = urgent.length;
+  const sevOrd = { critical:0, high:1, medium:2, low:3, info:4 };
+  const urgent = allAlerts.filter(a => a.urgent || a.severity === 'critical');
+
+  // Group by normalised subject
+  const groupMap = new Map();
+  for (const a of urgent) {
+    const key = a.subject.toLowerCase().trim();
+    if (!groupMap.has(key)) groupMap.set(key, []);
+    groupMap.get(key).push(a);
+  }
+
+  const groups = [...groupMap.values()].map(alerts => {
+    const rep = alerts[0];
+    return { alerts, rep, count: alerts.length };
+  }).sort((a, b) => {
+    const sevDiff = (sevOrd[a.rep.severity] ?? 5) - (sevOrd[b.rep.severity] ?? 5);
+    return sevDiff !== 0 ? sevDiff : b.count - a.count;
+  });
+
+  document.getElementById('urgBadge').textContent = groups.length;
   const list = document.getElementById('plist');
-  if (!urgent.length && !resolvedCount) {
+
+  if (!groups.length) {
     list.innerHTML = '<div style="padding:28px;text-align:center;color:var(--muted);font-size:13px">No urgent alerts.</div>';
     return;
   }
-  const resolvedNote = resolvedCount ? `<div style="padding:10px 18px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);text-align:center">&#10003; ${resolvedCount} resolved and hidden</div>` : '';
-  list.innerHTML = urgent.slice(0, 60).map(a => {
-    const isRes = resolvedIds.has(a.id);
+
+  list.innerHTML = groups.map(g => {
+    const { rep, count } = g;
+    const isSelGroup = g.alerts.some(a => a.id === selId);
+    const ids = g.alerts.map(a => a.id).join(',');
     return `
-    <div class="pi${a.id==selId?' sel':''}${isRes?' user-resolved':''}" onclick="selectAlert(${a.id})">
+    <div class="pi${isSelGroup ? ' sel' : ''}" onclick="selectAlert(${rep.id})">
       <div class="pi-top">
-        ${!isRes && a.urgent ? '<span class="udot"></span>' : ''}
-        ${isRes ? '<svg class="res-tick" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:13px;height:13px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>' : ''}
-        <span class="sev sev-${a.severity}">${a.severity}</span>
-        <span class="pi-subj">${esc(a.subject)}</span>
-        <button class="resolve-btn${isRes?' resolved':''}" onclick="toggleResolved(${a.id},event)" title="${isRes?'Undo resolve':'Mark resolved'}">
-          ${isRes
-            ? '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg> Resolved'
-            : '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Resolve'}
+        ${rep.urgent ? '<span class="udot"></span>' : ''}
+        <span class="sev sev-${rep.severity}">${rep.severity}</span>
+        <span class="pi-subj">${esc(rep.subject)}</span>
+        ${count > 1 ? `<span class="grp-badge" title="${count} occurrences">${count}</span>` : ''}
+        <button class="resolve-btn" onclick="resolveGroupIds(event,[${ids}])" title="Resolve ${count > 1 ? 'all ' + count + ' occurrences' : 'this alert'}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          ${count > 1 ? `All (${count})` : 'Resolve'}
         </button>
       </div>
-      <div class="pi-meta">${esc(a.affectedSystem)} &middot; ${esc(a.category)} ${a.date ? '&middot; ' + fmtDate(a.date, true) : ''}</div>
-      ${!isRes && a.action ? `<div class="pi-action">&#8594; ${esc(a.action)}</div>` : ''}
+      <div class="pi-meta">${esc(rep.affectedSystem)} &middot; ${esc(rep.category)} ${rep.date ? '&middot; ' + fmtDate(rep.date, true) : ''}</div>
+      ${rep.action ? `<div class="pi-action">&#8594; ${esc(rep.action)}</div>` : ''}
     </div>`;
-  }).join('') + resolvedNote;
+  }).join('');
+}
+
+async function unresolveAlert(filename) {
+  if (!watchHandle || !filename) return;
+  if (!await ensureWritePermission()) {
+    window.alert('Write permission is required.\nPlease click "Clear", re-select the folder, and grant write access when prompted.');
+    return;
+  }
+  try {
+    const resolvedDir = await watchHandle.getDirectoryHandle('Resolved');
+    const srcHandle   = await resolvedDir.getFileHandle(filename);
+    const file        = await srcHandle.getFile();
+    const buf         = await file.arrayBuffer();
+    const destHandle  = await watchHandle.getFileHandle(filename, { create: true });
+    const writable    = await destHandle.createWritable();
+    await writable.write(buf);
+    await writable.close();
+    await resolvedDir.removeEntry(filename);
+    await scanFolder();
+  } catch (e) {
+    console.error('Unresolve failed:', e);
+    window.alert('Could not move file back to active folder: ' + e.message);
+  }
+}
+
+async function resolveGroupIds(event, ids) {
+  event.stopPropagation();
+  if (!await ensureWritePermission()) {
+    window.alert('Write permission is required.\nPlease click "Clear", re-select the folder, and grant write access when prompted.');
+    return;
+  }
+  for (const id of ids) await moveFileToResolved(id, { skipRender: true });
+  if (selId && !allAlerts.find(a => a.id === selId)) {
+    document.getElementById('detailOverlay').classList.add('hidden');
+    selId = null;
+  }
+  buildSummary(); buildCharts(); buildPriority(); populateFilters(); filter();
 }
 
 function populateFilters() {
@@ -537,15 +955,12 @@ function populateFilters() {
 }
 
 function filter() {
-  const q = document.getElementById('srch').value.toLowerCase();
+  const q   = document.getElementById('srch').value.toLowerCase();
   const sev = document.getElementById('fSev').value;
   const cat = document.getElementById('fCat').value;
-  const res = document.getElementById('fRes').value;
   filtered = allAlerts.filter(a => {
     if (sev && a.severity !== sev) return false;
     if (cat && a.category !== cat) return false;
-    if (res === 'active' && (a.isResolved || resolvedIds.has(a.id))) return false;
-    if (res === 'resolved' && !a.isResolved && !resolvedIds.has(a.id)) return false;
     if (q) { const hay = (a.subject+a.sender+a.affectedSystem+a.category+a.summary).toLowerCase(); if (!hay.includes(q)) return false; }
     return true;
   });
@@ -556,13 +971,16 @@ function renderTable() {
   const chunk = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
   const tbody = document.getElementById('tbody');
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty">No alerts match.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty">No alerts match.</div></td></tr>`;
   } else {
     tbody.innerHTML = chunk.map(a => {
-      const isRes = resolvedIds.has(a.id);
+      const isSel = selectedIds.has(a.id);
       return `
-      <tr class="${a.id==selId?'sel':''} ${isRes?'user-resolved':''}" onclick="selectAlert(${a.id})" style="cursor:pointer">
-        <td>${!isRes && a.urgent ? '<span class="ui">&#9888;</span>' : ''}</td>
+      <tr class="${a.id==selId?'sel':''} ${isSel?'tbl-sel':''}" onclick="selectAlert(${a.id})" style="cursor:pointer">
+        <td class="cb-col" onclick="event.stopPropagation()">
+          <input type="checkbox" ${isSel?'checked':''} onchange="toggleSelect(${a.id},event)">
+        </td>
+        <td>${a.urgent ? '<span class="ui">&#9888;</span>' : ''}</td>
         <td><span class="sev sev-${a.severity}">${a.severity}</span></td>
         <td class="td-s"><strong>${esc(a.subject)}</strong><span>${esc(a.sender)}</span></td>
         <td class="td-sys" title="${esc(a.affectedSystem)}">${esc(a.affectedSystem)}</td>
@@ -570,10 +988,8 @@ function renderTable() {
         <td class="td-act" title="${esc(a.action)}">${esc(a.action)}</td>
         <td style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtDate(a.date)}</td>
         <td onclick="event.stopPropagation()">
-          <button class="resolve-btn${isRes?' resolved':''}" onclick="toggleResolved(${a.id},event)" title="${isRes?'Undo resolve':'Mark resolved'}">
-            ${isRes
-              ? '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg> Done'
-              : '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Resolve'}
+          <button class="resolve-btn" onclick="toggleResolved(${a.id},event)" title="Move to Resolved">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Resolve
           </button>
         </td>
       </tr>`;
@@ -583,6 +999,48 @@ function renderTable() {
   document.getElementById('pgnInfo').textContent=`${total} alert${total===1?'':'s'}${allAlerts.length!==total?' (filtered)':''}`;
   document.getElementById('prevBtn').disabled=page===0;
   document.getElementById('nextBtn').disabled=page>=pages-1;
+  updateBulkBar();
+}
+
+function renderResolvedPanel() {
+  const sec = document.getElementById('resSection');
+  const badge = document.getElementById('resBadge');
+  const tbody = document.getElementById('resTbody');
+  const n = resolvedAlerts.length;
+  badge.textContent = n;
+  if (n === 0) { sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  tbody.innerHTML = resolvedAlerts.map(a => `
+    <tr>
+      <td><span class="sev sev-${a.severity}">${a.severity}</span></td>
+      <td class="td-s"><strong>${esc(a.subject)}</strong><span>${esc(a.sender)}</span></td>
+      <td class="td-sys">${esc(a.affectedSystem)}</td>
+      <td><span class="chip">${esc(a.category)}</span></td>
+      <td style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtDate(a.date)}</td>
+      <td><button class="resolve-btn" onclick="unresolveAlert('${esc(a.filename)}')" title="Move back to active">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+        Unresolve
+      </button></td>
+    </tr>`).join('');
+}
+
+function syncPqHeight() {
+  const alertsPanel = document.getElementById('alertsPanel');
+  const panel = document.getElementById('pqPanel');
+  const plist = document.getElementById('plist');
+  if (!alertsPanel || !panel || !plist) return;
+  const totalH = alertsPanel.getBoundingClientRect().bottom - panel.getBoundingClientRect().top;
+  if (totalH <= 0) return;
+  const ph = panel.querySelector('.ph');
+  const headerH = ph ? ph.getBoundingClientRect().height : 0;
+  panel.style.height = totalH + 'px';
+  plist.style.height = (totalH - headerH) + 'px';
+}
+
+function toggleResolvedPanel() {
+  resolvedPanelOpen = !resolvedPanelOpen;
+  document.getElementById('resBody').style.display = resolvedPanelOpen ? '' : 'none';
+  document.getElementById('resChevron').classList.toggle('open', resolvedPanelOpen);
 }
 
 function pg(d){page=Math.max(0,Math.min(Math.ceil(filtered.length/PER_PAGE)-1,page+d));renderTable();}
@@ -622,6 +1080,10 @@ function selectAlert(id) {
     </div>`;
   document.getElementById('detailOverlay').classList.remove('hidden');
 }
+
+const _pqRO = new ResizeObserver(() => syncPqHeight());
+const _alertsEl = document.getElementById('alertsPanel');
+if (_alertsEl) _pqRO.observe(_alertsEl);
 
 function closeDetailBg(e){if(e.target===document.getElementById('detailOverlay'))document.getElementById('detailOverlay').classList.add('hidden');}
 function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
