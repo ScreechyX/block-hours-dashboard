@@ -182,6 +182,24 @@ tr.tbl-sel td{background:rgba(59,130,246,.1)!important}
 .res-chevron{transition:transform .2s;color:var(--muted)}
 .res-chevron.open{transform:rotate(180deg)}
 .res-body{border-top:1px solid var(--border)}
+
+/* PQ minimize */
+.pq-toggle{background:transparent;border:none;color:var(--muted);cursor:pointer;padding:3px 4px;border-radius:4px;display:flex;align-items:center;margin-left:auto;flex-shrink:0;transition:all .15s}
+.pq-toggle:hover{color:var(--text);background:var(--surface2)}
+.pq-toggle svg{width:14px;height:14px;transition:transform .2s}
+.pq-min-label{display:none;writing-mode:vertical-rl;transform:rotate(180deg);font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;padding:14px 0;align-self:center;cursor:pointer;user-select:none;flex:1}
+.grid.pq-min{grid-template-columns:44px 1fr}
+.grid.pq-min #pqPanel .ph>svg,.grid.pq-min #pqPanel .ph h2,.grid.pq-min #urgBadge{display:none}
+.grid.pq-min #pqPanel .ph{justify-content:center;padding:10px 0;border-bottom:none}
+.grid.pq-min .pq-toggle svg{transform:rotate(180deg)}
+.grid.pq-min .pq-min-label{display:block}
+.grid.pq-min #plist{display:none}
+
+/* Column resize */
+table.resizable{table-layout:fixed}
+th{position:relative}
+.col-rz{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;user-select:none;z-index:1}
+.col-rz:hover,.col-rz.active{background:rgba(59,130,246,.55);border-radius:2px}
 </style>
 </head>
 <body>
@@ -254,7 +272,11 @@ tr.tbl-sel td{background:rgba(59,130,246,.1)!important}
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:15px;height:15px;color:var(--critical)"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
           <h2>Priority Queue</h2>
           <span class="badge" id="urgBadge">0</span>
+          <button class="pq-toggle" onclick="togglePqMin()" title="Collapse priority queue">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+          </button>
         </div>
+        <div class="pq-min-label" onclick="togglePqMin()">Priority Queue</div>
         <div class="plist" id="plist"></div>
       </div>
       <div class="right">
@@ -285,7 +307,7 @@ tr.tbl-sel td{background:rgba(59,130,246,.1)!important}
             <button class="btn btn-ghost btn-sm" onclick="clearSelection()">Cancel</button>
           </div>
           <div class="twrap">
-            <table>
+            <table id="alertTable" class="resizable">
               <thead><tr>
                 <th class="cb-col"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)" title="Select all on page"></th>
                 <th>Severity</th><th>Subject</th>
@@ -330,6 +352,7 @@ const REFRESH_INTERVAL = 60; // seconds
 
 let allAlerts = [], filtered = [], page = 0;
 let resolvedAlerts = [], resolvedPanelOpen = false;
+let pqMinimized = false;
 let selectedIds = new Set();
 let sevChart = null, catChart = null, selId = null;
 let watchHandle = null, watchInterval = null, countdownInterval = null;
@@ -680,6 +703,7 @@ function loadData(raw, rawResolved = []) {
   document.getElementById('dash').style.display = '';
   buildSummary(); buildCharts(); buildPriority(); populateFilters(); filter();
   renderResolvedPanel();
+  initColResize();
   requestAnimationFrame(syncPqHeight);
 }
 
@@ -1024,6 +1048,56 @@ function renderResolvedPanel() {
     </tr>`).join('');
 }
 
+function togglePqMin() {
+  pqMinimized = !pqMinimized;
+  document.querySelector('.grid').classList.toggle('pq-min', pqMinimized);
+  requestAnimationFrame(syncPqHeight);
+}
+
+const colWidths = [36, 90, 250, 140, 120, 180, 100, 90];
+
+function initColResize() {
+  const table = document.getElementById('alertTable');
+  if (!table) return;
+  let cg = table.querySelector('colgroup');
+  if (!cg) {
+    cg = document.createElement('colgroup');
+    colWidths.forEach(w => {
+      const col = document.createElement('col');
+      col.style.width = w + 'px';
+      cg.appendChild(col);
+    });
+    table.insertBefore(cg, table.firstChild);
+  }
+  const ths = Array.from(table.querySelectorAll('thead th'));
+  ths.forEach((th, i) => {
+    if (i === 0 || i === ths.length - 1) return;
+    if (th.querySelector('.col-rz')) return;
+    const rz = document.createElement('div');
+    rz.className = 'col-rz';
+    rz.addEventListener('mousedown', e => startColResize(e, cg.children[i]));
+    th.appendChild(rz);
+  });
+}
+
+function startColResize(e, colEl) {
+  e.preventDefault();
+  const startX = e.clientX;
+  const startW = parseInt(colEl.style.width) || 100;
+  const rz = e.target;
+  rz.classList.add('active');
+  const onMove = ev => {
+    colEl.style.width = Math.max(50, startW + ev.clientX - startX) + 'px';
+  };
+  const onUp = () => {
+    rz.classList.remove('active');
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  };
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
 function syncPqHeight() {
   const alertsPanel = document.getElementById('alertsPanel');
   const panel = document.getElementById('pqPanel');
@@ -1031,10 +1105,12 @@ function syncPqHeight() {
   if (!alertsPanel || !panel || !plist) return;
   const totalH = alertsPanel.getBoundingClientRect().bottom - panel.getBoundingClientRect().top;
   if (totalH <= 0) return;
-  const ph = panel.querySelector('.ph');
-  const headerH = ph ? ph.getBoundingClientRect().height : 0;
   panel.style.height = totalH + 'px';
-  plist.style.height = (totalH - headerH) + 'px';
+  if (!pqMinimized) {
+    const ph = panel.querySelector('.ph');
+    const headerH = ph ? ph.getBoundingClientRect().height : 0;
+    plist.style.height = (totalH - headerH) + 'px';
+  }
 }
 
 function toggleResolvedPanel() {
