@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "index",
+      "runtimeExecutable": "powershell.exe",
+      "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", ".claude\\serve.ps1"],
+      "port": 3000
+    },
+    {
+      "name": "alert-dashboard",
+      "runtimeExecutable": "powershell.exe",
+      "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", ".claude\\serve-dashboard.ps1"],
+      "port": 3001
+    }
+  ]
+}
