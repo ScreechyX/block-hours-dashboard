@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PST Alert Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface2: #263449;
+  --border: #334155;
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --critical: #ef4444;
+  --critical-bg: #450a0a;
+  --critical-border: #7f1d1d;
+  --high: #f97316;
+  --high-bg: #431407;
+  --high-border: #7c2d12;
+  --medium: #eab308;
+  --medium-bg: #422006;
+  --medium-border: #713f12;
+  --low: #22c55e;
+  --low-bg: #052e16;
+  --low-border: #14532d;
+  --info: #3b82f6;
+  --info-bg: #172554;
+  --info-border: #1e3a8a;
+  --unknown: #64748b;
+  --unknown-bg: #1e293b;
+  --unknown-border: #334155;
+}
+body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+/* ── Header ── */
+.header {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex; align-items: center; height: 60px; gap: 16px;
+  position: sticky; top: 0; z-index: 100;
+}
+.logo { display: flex; align-items: center; gap: 10px; }
+.logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.logo-icon svg { width: 18px; height: 18px; color: white; }
+.logo h1 { font-size: 17px; font-weight: 700; color: white; }
+.logo span { font-size: 11px; color: var(--text-muted); margin-top: 1px; display: block; }
+.header-spacer { flex: 1; }
+.btn { padding: 8px 16px; border-radius: 7px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s; }
+.btn-primary { background: #3b82f6; color: white; }
+.btn-primary:hover { background: #2563eb; }
+.btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+.btn-ghost:hover { color: var(--text); border-color: #4b5563; }
+.btn svg { width: 14px; height: 14px; }
+
+/* ── Upload Modal ── */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 200; }
+.modal-overlay.hidden { display: none; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 32px; width: 480px; max-width: 95vw; }
+.modal h2 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+.modal p { color: var(--text-muted); font-size: 13px; margin-bottom: 20px; }
+.drop-zone {
+  border: 2px dashed var(--border); border-radius: 10px; padding: 40px 24px;
+  text-align: center; cursor: pointer; transition: all 0.2s; margin-bottom: 20px;
+}
+.drop-zone:hover, .drop-zone.dragover { border-color: #3b82f6; background: rgba(59,130,246,0.06); }
+.drop-zone svg { width: 40px; height: 40px; color: var(--text-muted); margin-bottom: 12px; }
+.drop-zone p { font-size: 13px; color: var(--text-muted); }
+.drop-zone strong { color: var(--text); }
+.drop-zone .file-name { color: #3b82f6; font-weight: 600; margin-top: 6px; }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+.form-group input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 9px 12px; color: var(--text); font-size: 13px; outline: none; }
+.form-group input:focus { border-color: #3b82f6; }
+.form-group small { color: var(--text-muted); font-size: 11px; margin-top: 4px; display: block; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+
+/* ── Progress ── */
+.progress-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 200; }
+.progress-overlay.hidden { display: none; }
+.progress-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 32px 40px; width: 440px; text-align: center; }
+.progress-box h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+.progress-box .step { color: var(--text-muted); font-size: 13px; margin-bottom: 20px; }
+.progress-bar-wrap { background: var(--bg); border-radius: 100px; height: 8px; overflow: hidden; margin-bottom: 10px; }
+.progress-bar-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #8b5cf6); border-radius: 100px; transition: width 0.3s; }
+.progress-label { font-size: 12px; color: var(--text-muted); }
+.spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Layout ── */
+.content { padding: 24px; max-width: 1600px; margin: 0 auto; }
+
+/* ── Summary cards ── */
+.summary-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.summary-card {
+  background: var(--surface); border-radius: 10px; padding: 16px;
+  border-left: 3px solid transparent; display: flex; flex-direction: column; gap: 4px;
+}
+.summary-card .count { font-size: 28px; font-weight: 800; line-height: 1; }
+.summary-card .label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+.summary-card.critical { border-color: var(--critical); }
+.summary-card.critical .count { color: var(--critical); }
+.summary-card.high { border-color: var(--high); }
+.summary-card.high .count { color: var(--high); }
+.summary-card.medium { border-color: var(--medium); }
+.summary-card.medium .count { color: var(--medium); }
+.summary-card.low { border-color: var(--low); }
+.summary-card.low .count { color: var(--low); }
+.summary-card.info { border-color: var(--info); }
+.summary-card.info .count { color: var(--info); }
+.summary-card.total { border-color: #8b5cf6; }
+.summary-card.total .count { color: #a78bfa; }
+
+/* ── Main grid ── */
+.main-grid { display: grid; grid-template-columns: 380px 1fr; gap: 20px; }
+@media (max-width: 1100px) { .main-grid { grid-template-columns: 1fr; } }
+
+/* ── Priority queue ── */
+.panel { background: var(--surface); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+.panel-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+.panel-header h2 { font-size: 14px; font-weight: 700; flex: 1; }
+.panel-header .badge { background: var(--critical); color: white; border-radius: 100px; padding: 2px 8px; font-size: 11px; font-weight: 700; }
+.panel-header .badge.orange { background: var(--high); }
+.priority-list { overflow-y: auto; max-height: 600px; }
+.priority-item {
+  padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.04);
+  cursor: pointer; transition: background 0.15s;
+}
+.priority-item:hover { background: var(--surface2); }
+.priority-item:last-child { border-bottom: none; }
+.priority-item.selected { background: rgba(59,130,246,0.08); border-left: 2px solid #3b82f6; }
+.priority-item .pi-top { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
+.sev-badge { padding: 2px 8px; border-radius: 5px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0; }
+.sev-critical { background: var(--critical-bg); color: var(--critical); border: 1px solid var(--critical-border); }
+.sev-high { background: var(--high-bg); color: var(--high); border: 1px solid var(--high-border); }
+.sev-medium { background: var(--medium-bg); color: var(--medium); border: 1px solid var(--medium-border); }
+.sev-low { background: var(--low-bg); color: var(--low); border: 1px solid var(--low-border); }
+.sev-info { background: var(--info-bg); color: var(--info); border: 1px solid var(--info-border); }
+.sev-unknown { background: var(--unknown-bg); color: var(--unknown); border: 1px solid var(--unknown-border); }
+.priority-item .pi-subject { font-size: 13px; font-weight: 600; line-height: 1.3; }
+.priority-item .pi-system { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+.priority-item .pi-action { font-size: 11px; color: #60a5fa; margin-top: 4px; }
+.urgent-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--critical); flex-shrink: 0; margin-top: 4px; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100%{ opacity:1; } 50%{ opacity:0.3; } }
+
+/* ── Right panel ── */
+.right-panel { display: flex; flex-direction: column; gap: 16px; }
+
+/* ── Charts row ── */
+.charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chart-panel { background: var(--surface); border-radius: 12px; border: 1px solid var(--border); padding: 18px; }
+.chart-panel h3 { font-size: 13px; font-weight: 700; margin-bottom: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.chart-wrap { position: relative; height: 180px; }
+
+/* ── Alert table ── */
+.table-panel { background: var(--surface); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+.table-toolbar { padding: 12px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.table-toolbar h2 { font-size: 14px; font-weight: 700; flex: 1; }
+.search-input { background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 7px 12px; color: var(--text); font-size: 13px; outline: none; width: 200px; }
+.search-input:focus { border-color: #3b82f6; }
+.filter-select { background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; color: var(--text); font-size: 13px; outline: none; cursor: pointer; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+thead { background: var(--bg); }
+th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); white-space: nowrap; }
+td { padding: 11px 14px; border-top: 1px solid rgba(255,255,255,0.04); font-size: 13px; vertical-align: middle; }
+tr:hover td { background: rgba(255,255,255,0.02); }
+tr.selected td { background: rgba(59,130,246,0.07); }
+.td-subject { max-width: 280px; }
+.td-subject strong { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.td-subject span { font-size: 11px; color: var(--text-muted); }
+.td-system { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+.td-action { font-size: 12px; color: #60a5fa; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cat-chip { background: rgba(255,255,255,0.07); border-radius: 5px; padding: 2px 7px; font-size: 11px; white-space: nowrap; }
+.urgent-icon { color: var(--critical); }
+.empty-state { text-align: center; padding: 60px 24px; color: var(--text-muted); }
+.empty-state svg { width: 48px; height: 48px; margin: 0 auto 12px; display: block; opacity: 0.3; }
+.empty-state h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+
+/* ── Detail modal ── */
+.detail-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 200; }
+.detail-overlay.hidden { display: none; }
+.detail-modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; width: 640px; max-width: 95vw; max-height: 85vh; overflow-y: auto; }
+.detail-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 12px; position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.detail-header h2 { font-size: 16px; font-weight: 700; flex: 1; line-height: 1.3; }
+.detail-close { background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: 6px; }
+.detail-close:hover { color: var(--text); background: var(--surface2); }
+.detail-body { padding: 20px 24px; }
+.detail-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+.meta-item label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); display: block; margin-bottom: 3px; }
+.meta-item span { font-size: 13px; }
+.detail-section { margin-bottom: 16px; }
+.detail-section h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px; }
+.detail-section p { font-size: 13px; line-height: 1.6; }
+.detail-body-preview { background: var(--bg); border-radius: 8px; padding: 14px; font-size: 12px; line-height: 1.6; color: var(--text-muted); white-space: pre-wrap; max-height: 200px; overflow-y: auto; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { background: rgba(59,130,246,0.15); color: #93c5fd; border-radius: 5px; padding: 3px 8px; font-size: 11px; }
+.action-box { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); border-radius: 8px; padding: 12px; }
+.action-box h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #4ade80; margin-bottom: 6px; }
+.action-box p { font-size: 13px; color: #86efac; }
+.urgent-banner { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35); border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; gap: 8px; margin-bottom: 16px; font-size: 13px; font-weight: 600; color: var(--critical); }
+
+/* ── Welcome/empty ── */
+.welcome { text-align: center; padding: 80px 24px; }
+.welcome svg { width: 64px; height: 64px; margin: 0 auto 20px; display: block; color: #334155; }
+.welcome h2 { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
+.welcome p { color: var(--text-muted); font-size: 15px; margin-bottom: 28px; }
+
+/* ── Pagination ── */
+.pagination { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.pagination span { font-size: 12px; color: var(--text-muted); flex: 1; }
+.page-btn { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 11px; color: var(--text); font-size: 12px; cursor: pointer; }
+.page-btn:hover { border-color: #4b5563; }
+.page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="logo">
+    <div class="logo-icon">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+    </div>
+    <div>
+      <h1>Alert Intelligence</h1>
+      <span>PST Email Analyser</span>
+    </div>
+  </div>
+  <div class="header-spacer"></div>
+  <button class="btn btn-ghost" id="btnClear" style="display:none" onclick="clearData()">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+    Clear
+  </button>
+  <button class="btn btn-primary" onclick="openUpload()">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+    Import PST
+  </button>
+</header>
+
+<!-- Upload Modal -->
+<div class="modal-overlay hidden" id="uploadModal">
+  <div class="modal">
+    <h2>Import PST File</h2>
+    <p>Upload an Outlook PST file. Emails will be analysed by Claude AI and categorised by severity.</p>
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+      <p><strong>Click to browse</strong> or drag &amp; drop</p>
+      <p>.pst files only</p>
+      <p class="file-name" id="selectedFileName"></p>
+    </div>
+    <input type="file" id="fileInput" accept=".pst" style="display:none" onchange="onFileSelect(this)">
+    <div class="form-group">
+      <label>Anthropic API Key</label>
+      <input type="password" id="apiKeyInput" placeholder="sk-ant-..." autocomplete="off">
+      <small>Required for AI analysis. Set ANTHROPIC_API_KEY env var on the server to avoid entering it here.</small>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeUpload()">Cancel</button>
+      <button class="btn btn-primary" id="btnAnalyse" onclick="startUpload()" disabled>
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+        Analyse
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Progress Overlay -->
+<div class="progress-overlay hidden" id="progressOverlay">
+  <div class="progress-box">
+    <div class="spinner"></div>
+    <h3 id="progressTitle">Processing...</h3>
+    <p class="step" id="progressStep">Uploading PST file</p>
+    <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressFill" style="width:0%"></div></div>
+    <p class="progress-label" id="progressLabel"></p>
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="detail-overlay hidden" id="detailOverlay" onclick="closeDetail(event)">
+  <div class="detail-modal" id="detailModal"></div>
+</div>
+
+<!-- Main Content -->
+<main class="content" id="mainContent">
+  <div class="welcome" id="welcomeState">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+    <h2>No alerts loaded</h2>
+    <p>Import a PST file to analyse and triage your alert emails using AI.</p>
+    <button class="btn btn-primary" onclick="openUpload()" style="margin:0 auto">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:15px;height:15px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+      Import PST File
+    </button>
+  </div>
+  <div id="dashboardState" style="display:none">
+    <!-- Summary cards -->
+    <div class="summary-row" id="summaryRow"></div>
+    <!-- Main grid -->
+    <div class="main-grid">
+      <!-- Priority queue -->
+      <div class="panel">
+        <div class="panel-header">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px;color:#ef4444"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+          <h2>Priority Queue</h2>
+          <span class="badge" id="urgentCount">0</span>
+        </div>
+        <div class="priority-list" id="priorityList"></div>
+      </div>
+      <!-- Right: charts + table -->
+      <div class="right-panel">
+        <div class="charts-row">
+          <div class="chart-panel">
+            <h3>By Severity</h3>
+            <div class="chart-wrap"><canvas id="sevChart"></canvas></div>
+          </div>
+          <div class="chart-panel">
+            <h3>By Category</h3>
+            <div class="chart-wrap"><canvas id="catChart"></canvas></div>
+          </div>
+        </div>
+        <div class="table-panel">
+          <div class="table-toolbar">
+            <h2>All Alerts</h2>
+            <input class="search-input" type="text" placeholder="Search..." id="searchInput" oninput="filterTable()">
+            <select class="filter-select" id="sevFilter" onchange="filterTable()">
+              <option value="">All severities</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+              <option value="info">Info</option>
+            </select>
+            <select class="filter-select" id="catFilter" onchange="filterTable()">
+              <option value="">All categories</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Severity</th>
+                  <th>Subject</th>
+                  <th>System</th>
+                  <th>Category</th>
+                  <th>Recommended Action</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody id="alertTable"></tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <span id="paginationInfo"></span>
+            <button class="page-btn" id="prevBtn" onclick="changePage(-1)">&#8592; Prev</button>
+            <button class="page-btn" id="nextBtn" onclick="changePage(1)">Next &#8594;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const API = 'http://127.0.0.1:8765';
+const PAGE_SIZE = 20;
+
+let allAlerts = [];
+let filteredAlerts = [];
+let currentPage = 0;
+let sevChart = null;
+let catChart = null;
+let selectedId = null;
+let selectedFile = null;
+let pollTimer = null;
+
+// ── Upload Modal ──────────────────────────────────────────────
+function openUpload() {
+  document.getElementById('uploadModal').classList.remove('hidden');
+}
+function closeUpload() {
+  document.getElementById('uploadModal').classList.add('hidden');
+}
+
+function onFileSelect(input) {
+  selectedFile = input.files[0];
+  document.getElementById('selectedFileName').textContent = selectedFile ? selectedFile.name : '';
+  document.getElementById('btnAnalyse').disabled = !selectedFile;
+}
+
+// Drag & drop
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if (f && f.name.endsWith('.pst')) {
+    selectedFile = f;
+    document.getElementById('selectedFileName').textContent = f.name;
+    document.getElementById('btnAnalyse').disabled = false;
+  }
+});
+
+async function startUpload() {
+  if (!selectedFile) return;
+  const apiKey = document.getElementById('apiKeyInput').value.trim();
+  closeUpload();
+  showProgress('Uploading PST…', 'Sending file to server', 0);
+
+  try {
+    const form = new FormData();
+    form.append('file', selectedFile);
+    if (apiKey) form.append('api_key', apiKey);
+
+    const res = await fetch(`${API}/api/upload`, { method: 'POST', body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Upload failed');
+    pollJob(data.job_id);
+  } catch (err) {
+    hideProgress();
+    alert('Error: ' + err.message);
+  }
+}
+
+function pollJob(jobId) {
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(async () => {
+    try {
+      const res = await fetch(`${API}/api/jobs/${jobId}`);
+      const job = await res.json();
+
+      if (job.status === 'queued') {
+        showProgress('Queued…', 'Waiting to start', 0);
+      } else if (job.status === 'parsing') {
+        showProgress('Parsing PST…', 'Reading emails from file', 10);
+      } else if (job.status === 'analyzing') {
+        const pct = job.total > 0 ? Math.round((job.progress / job.total) * 100) : 0;
+        showProgress('Analysing with AI…', `Processed ${job.progress} of ${job.total} alerts`, pct, job.progress, job.total);
+      } else if (job.status === 'done') {
+        hideProgress();
+        const r2 = await fetch(`${API}/api/jobs/${jobId}/results`);
+        const body = await r2.json();
+        loadResults(body.results);
+        return;
+      } else if (job.status === 'error') {
+        hideProgress();
+        alert('Analysis error: ' + job.error);
+        return;
+      }
+      pollJob(jobId);
+    } catch (e) {
+      hideProgress();
+      alert('Connection error: ' + e.message);
+    }
+  }, 1500);
+}
+
+function showProgress(title, step, pct, done, total) {
+  document.getElementById('progressOverlay').classList.remove('hidden');
+  document.getElementById('progressTitle').textContent = title;
+  document.getElementById('progressStep').textContent = step;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressLabel').textContent = (done != null && total != null) ? `${done} / ${total}` : (pct + '%');
+}
+function hideProgress() {
+  document.getElementById('progressOverlay').classList.add('hidden');
+}
+
+// ── Data ──────────────────────────────────────────────────────
+function loadResults(results) {
+  allAlerts = results;
+  document.getElementById('btnClear').style.display = '';
+  document.getElementById('welcomeState').style.display = 'none';
+  document.getElementById('dashboardState').style.display = '';
+
+  buildSummary();
+  buildCharts();
+  buildPriorityQueue();
+  populateCatFilter();
+  filterTable();
+}
+
+function clearData() {
+  if (!confirm('Clear all loaded alerts?')) return;
+  allAlerts = [];
+  filteredAlerts = [];
+  selectedFile = null;
+  document.getElementById('btnClear').style.display = 'none';
+  document.getElementById('dashboardState').style.display = 'none';
+  document.getElementById('welcomeState').style.display = '';
+  if (sevChart) { sevChart.destroy(); sevChart = null; }
+  if (catChart) { catChart.destroy(); catChart = null; }
+}
+
+// ── Summary cards ──────────────────────────────────────────────
+function buildSummary() {
+  const counts = { critical:0, high:0, medium:0, low:0, info:0 };
+  allAlerts.forEach(a => { if (counts[a.severity] !== undefined) counts[a.severity]++; });
+  const urgent = allAlerts.filter(a => a.needs_immediate_attention).length;
+  document.getElementById('summaryRow').innerHTML = `
+    <div class="summary-card total"><div class="count">${allAlerts.length}</div><div class="label">Total Alerts</div></div>
+    <div class="summary-card critical"><div class="count">${counts.critical}</div><div class="label">Critical</div></div>
+    <div class="summary-card high"><div class="count">${counts.high}</div><div class="label">High</div></div>
+    <div class="summary-card medium"><div class="count">${counts.medium}</div><div class="label">Medium</div></div>
+    <div class="summary-card low"><div class="count">${counts.low}</div><div class="label">Low</div></div>
+    <div class="summary-card info"><div class="count">${counts.info}</div><div class="label">Info</div></div>
+  `;
+}
+
+// ── Charts ─────────────────────────────────────────────────────
+function buildCharts() {
+  const sevColors = { critical:'#ef4444', high:'#f97316', medium:'#eab308', low:'#22c55e', info:'#3b82f6', unknown:'#64748b' };
+  const sevCounts = {};
+  const catCounts = {};
+  allAlerts.forEach(a => {
+    sevCounts[a.severity] = (sevCounts[a.severity]||0)+1;
+    catCounts[a.category] = (catCounts[a.category]||0)+1;
+  });
+
+  if (sevChart) sevChart.destroy();
+  sevChart = new Chart(document.getElementById('sevChart'), {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(sevCounts),
+      datasets: [{ data: Object.values(sevCounts), backgroundColor: Object.keys(sevCounts).map(k=>sevColors[k]||'#64748b'), borderWidth: 0 }],
+    },
+    options: { plugins: { legend: { labels: { color:'#94a3b8', font:{size:11}, boxWidth:12 } } }, cutout:'65%' },
+  });
+
+  if (catChart) catChart.destroy();
+  const catEntries = Object.entries(catCounts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  catChart = new Chart(document.getElementById('catChart'), {
+    type: 'bar',
+    data: {
+      labels: catEntries.map(([k])=>k),
+      datasets: [{ data: catEntries.map(([,v])=>v), backgroundColor:'rgba(139,92,246,0.7)', borderRadius:5 }],
+    },
+    options: {
+      indexAxis:'y', plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#64748b',font:{size:10}},grid:{color:'rgba(255,255,255,0.05)'}},
+        y:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false}},
+      },
+    },
+  });
+}
+
+// ── Priority Queue ─────────────────────────────────────────────
+function buildPriorityQueue() {
+  const urgent = allAlerts.filter(a => a.needs_immediate_attention || a.severity === 'critical');
+  document.getElementById('urgentCount').textContent = urgent.length;
+  const list = document.getElementById('priorityList');
+  if (!urgent.length) {
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px">No urgent alerts — system looks healthy.</div>';
+    return;
+  }
+  list.innerHTML = urgent.slice(0,50).map(a => `
+    <div class="priority-item${a.id===selectedId?' selected':''}" onclick="selectAlert('${a.id}')">
+      <div class="pi-top">
+        ${a.needs_immediate_attention ? '<span class="urgent-dot"></span>' : ''}
+        <span class="sev-badge sev-${a.severity}">${a.severity}</span>
+        <span class="pi-subject">${escHtml(a.subject)}</span>
+      </div>
+      <div class="pi-system">${escHtml(a.affected_system)} &middot; ${escHtml(a.category)}</div>
+      ${a.recommended_action ? `<div class="pi-action">&#8594; ${escHtml(a.recommended_action)}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+// ── Category filter ────────────────────────────────────────────
+function populateCatFilter() {
+  const cats = [...new Set(allAlerts.map(a=>a.category))].sort();
+  const sel = document.getElementById('catFilter');
+  sel.innerHTML = '<option value="">All categories</option>' + cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+}
+
+// ── Table ──────────────────────────────────────────────────────
+function filterTable() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const sev = document.getElementById('sevFilter').value;
+  const cat = document.getElementById('catFilter').value;
+  filteredAlerts = allAlerts.filter(a => {
+    if (sev && a.severity !== sev) return false;
+    if (cat && a.category !== cat) return false;
+    if (q) {
+      const hay = (a.subject+a.sender+a.affected_system+a.category+a.summary).toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  currentPage = 0;
+  renderTable();
+}
+
+function renderTable() {
+  const start = currentPage * PAGE_SIZE;
+  const page = filteredAlerts.slice(start, start + PAGE_SIZE);
+  const tbody = document.getElementById('alertTable');
+
+  if (!filteredAlerts.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><h3>No alerts match</h3></div></td></tr>`;
+  } else {
+    tbody.innerHTML = page.map(a => `
+      <tr class="${a.id===selectedId?'selected':''}" onclick="selectAlert('${a.id}')" style="cursor:pointer">
+        <td>${a.needs_immediate_attention ? '<span class="urgent-icon" title="Needs immediate attention">&#9888;</span>' : ''}</td>
+        <td><span class="sev-badge sev-${a.severity}">${a.severity}</span></td>
+        <td class="td-subject"><strong>${escHtml(a.subject)}</strong><span>${escHtml(a.sender||'')}</span></td>
+        <td class="td-system" title="${escHtml(a.affected_system)}">${escHtml(a.affected_system)}</td>
+        <td><span class="cat-chip">${escHtml(a.category)}</span></td>
+        <td class="td-action" title="${escHtml(a.recommended_action)}">${escHtml(a.recommended_action||'')}</td>
+        <td style="font-size:11px;color:var(--text-muted)">${formatDate(a.date)}</td>
+      </tr>
+    `).join('');
+  }
+
+  const total = filteredAlerts.length;
+  const pages = Math.ceil(total / PAGE_SIZE);
+  document.getElementById('paginationInfo').textContent = `${total} alert${total===1?'':'s'}${allAlerts.length!==total?' (filtered)':''}`;
+  document.getElementById('prevBtn').disabled = currentPage === 0;
+  document.getElementById('nextBtn').disabled = currentPage >= pages - 1;
+}
+
+function changePage(dir) {
+  const pages = Math.ceil(filteredAlerts.length / PAGE_SIZE);
+  currentPage = Math.max(0, Math.min(pages-1, currentPage+dir));
+  renderTable();
+}
+
+// ── Alert detail ──────────────────────────────────────────────
+function selectAlert(id) {
+  selectedId = id;
+  const a = allAlerts.find(x => x.id === id);
+  if (!a) return;
+
+  // Highlight in table and priority list
+  document.querySelectorAll('#alertTable tr').forEach(r => r.classList.remove('selected'));
+  document.querySelectorAll('.priority-item').forEach(r => r.classList.remove('selected'));
+  const tableRow = [...document.querySelectorAll('#alertTable tr')].find(r => r.onclick?.toString().includes(id));
+  if (tableRow) tableRow.classList.add('selected');
+  const piRow = [...document.querySelectorAll('.priority-item')].find(r => r.onclick?.toString().includes(id));
+  if (piRow) piRow.classList.add('selected');
+
+  // Build detail modal
+  const modal = document.getElementById('detailModal');
+  modal.innerHTML = `
+    <div class="detail-header">
+      <span class="sev-badge sev-${a.severity}" style="margin-top:2px">${a.severity}</span>
+      <h2>${escHtml(a.subject)}</h2>
+      <button class="detail-close" onclick="closeDetailBtn()">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:18px;height:18px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="detail-body">
+      ${a.needs_immediate_attention ? '<div class="urgent-banner"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:18px;height:18px;flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>Needs Immediate Attention</div>' : ''}
+      <div class="detail-meta">
+        <div class="meta-item"><label>From</label><span>${escHtml(a.sender||'Unknown')}</span></div>
+        <div class="meta-item"><label>Date</label><span>${formatDate(a.date) || 'Unknown'}</span></div>
+        <div class="meta-item"><label>Affected System</label><span>${escHtml(a.affected_system)}</span></div>
+        <div class="meta-item"><label>Category</label><span>${escHtml(a.category)}</span></div>
+        <div class="meta-item"><label>Folder</label><span style="font-size:11px;color:var(--text-muted)">${escHtml(a.folder||'')}</span></div>
+      </div>
+      ${a.summary ? `<div class="detail-section"><h4>AI Summary</h4><p>${escHtml(a.summary)}</p></div>` : ''}
+      ${a.recommended_action ? `<div class="action-box"><h4>Recommended Action</h4><p>${escHtml(a.recommended_action)}</p></div>` : ''}
+      ${a.tags && a.tags.length ? `<div class="detail-section" style="margin-top:12px"><h4>Tags</h4><div class="tags">${a.tags.map(t=>`<span class="tag">${escHtml(t)}</span>`).join('')}</div></div>` : ''}
+      ${a.body_preview ? `<div class="detail-section" style="margin-top:12px"><h4>Email Preview</h4><div class="detail-body-preview">${escHtml(a.body_preview)}</div></div>` : ''}
+    </div>
+  `;
+  document.getElementById('detailOverlay').classList.remove('hidden');
+}
+
+function closeDetail(e) {
+  if (e.target === document.getElementById('detailOverlay')) closeDetailBtn();
+}
+function closeDetailBtn() {
+  document.getElementById('detailOverlay').classList.add('hidden');
+}
+
+// ── Helpers ────────────────────────────────────────────────────
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  try {
+    return new Date(d).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  } catch { return d; }
+}
+
+// Check server health on load
+(async () => {
+  try {
+    const r = await fetch(`${API}/api/health`);
+    const h = await r.json();
+    if (!h.anthropic_key_configured) {
+      // Show subtle hint — key will need to be entered manually
+      console.info('ANTHROPIC_API_KEY not set on server — users will need to enter it at upload time.');
+    }
+  } catch {
+    console.warn('Backend not reachable at', API);
+  }
+})();
+</script>
+</body>
+</html>
