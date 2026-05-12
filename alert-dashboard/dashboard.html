@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alert Intelligence Dashboard — EML</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#263449;--border:#334155;
+  --text:#e2e8f0;--muted:#94a3b8;
+  --critical:#ef4444;--critical-bg:rgba(239,68,68,.12);--critical-bd:rgba(239,68,68,.3);
+  --high:#f97316;--high-bg:rgba(249,115,22,.12);--high-bd:rgba(249,115,22,.3);
+  --medium:#eab308;--medium-bg:rgba(234,179,8,.12);--medium-bd:rgba(234,179,8,.3);
+  --low:#22c55e;--low-bg:rgba(34,197,94,.1);--low-bd:rgba(34,197,94,.25);
+  --info:#3b82f6;--info-bg:rgba(59,130,246,.12);--info-bd:rgba(59,130,246,.3);
+}
+body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
+
+.hdr{background:linear-gradient(135deg,#1e293b,#0f172a);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;height:60px;gap:14px;position:sticky;top:0;z-index:100}
+.logo-icon{width:34px;height:34px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-icon svg{width:18px;height:18px;color:#fff}
+.logo h1{font-size:16px;font-weight:700;color:#fff}
+.logo span{font-size:11px;color:var(--muted);display:block}
+.hdr-space{flex:1}
+.btn{padding:8px 16px;border-radius:7px;border:none;cursor:pointer;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:6px;transition:all .15s;white-space:nowrap}
+.btn svg{width:14px;height:14px}
+.btn-primary{background:#3b82f6;color:#fff}.btn-primary:hover{background:#2563eb}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover{color:var(--text);border-color:#4b5563}
+
+/* Status bar */
+.sbar{background:rgba(30,41,59,.9);border-bottom:1px solid var(--border);padding:6px 24px;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);position:sticky;top:60px;z-index:99}
+.sbar.hidden{display:none}
+.sdot{width:7px;height:7px;border-radius:50%;background:#22c55e;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.sdot.active{animation:pulse 2s infinite}
+.sdot.scanning{background:#f97316;animation:pulse .7s infinite}
+.sbar-folder{color:var(--text);font-weight:600;max-width:400px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sbar-sp{flex:1}
+.sbar-countdown{font-size:11px;color:#475569}
+
+/* Welcome */
+.welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(100vh - 60px);padding:40px;text-align:center}
+.welcome-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px 48px;max-width:520px;width:100%}
+.welcome-card svg.hero{width:52px;height:52px;color:#334155;margin:0 auto 20px;display:block}
+.welcome-card h2{font-size:22px;font-weight:700;margin-bottom:10px}
+.welcome-card p{color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:28px}
+.steps{text-align:left;background:var(--bg);border-radius:10px;padding:16px 20px;margin-bottom:24px}
+.step{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;font-size:13px}
+.step:last-child{margin-bottom:0}
+.step-n{background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px}
+.step-t{color:var(--text);line-height:1.5}
+.step-t code{background:rgba(59,130,246,.15);color:#93c5fd;border-radius:4px;padding:1px 6px;font-size:12px}
+.compat-warn{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 14px;font-size:12px;color:#fca5a5;margin-bottom:16px;display:none;text-align:left}
+
+/* Dashboard */
+.page{padding:22px;max-width:1700px;margin:0 auto}
+.srow{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:22px}
+.scard{background:var(--surface);border-radius:10px;padding:16px;border-left:3px solid transparent}
+.scard .n{font-size:30px;font-weight:800;line-height:1}
+.scard .l{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-top:3px}
+.scard.total{border-color:#8b5cf6}.scard.total .n{color:#a78bfa}
+.scard.critical{border-color:var(--critical)}.scard.critical .n{color:var(--critical)}
+.scard.high{border-color:var(--high)}.scard.high .n{color:var(--high)}
+.scard.medium{border-color:var(--medium)}.scard.medium .n{color:var(--medium)}
+.scard.low{border-color:var(--low)}.scard.low .n{color:var(--low)}
+.scard.info{border-color:var(--info)}.scard.info .n{color:var(--info)}
+.scard.resolved{border-color:#10b981}.scard.resolved .n{color:#34d399}
+.scard.auto-resolved{border-color:#0891b2}.scard.auto-resolved .n{color:#22d3ee}
+
+.grid{display:grid;grid-template-columns:360px 1fr;gap:18px}
+@media(max-width:1100px){.grid{grid-template-columns:1fr}}
+
+.panel{background:var(--surface);border-radius:12px;border:1px solid var(--border);overflow:hidden}
+.ph{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.ph h2{font-size:14px;font-weight:700;flex:1}
+.ph .badge{background:var(--critical);color:#fff;border-radius:100px;padding:2px 8px;font-size:11px;font-weight:700}
+
+.plist{overflow-y:auto}
+#pqPanel{display:flex;flex-direction:column;overflow:hidden}
+#pqPanel .plist{overflow-y:auto}
+.grp-badge{background:rgba(139,92,246,.2);color:#a78bfa;border:1px solid rgba(139,92,246,.3);border-radius:100px;padding:1px 7px;font-size:10px;font-weight:700;white-space:nowrap;flex-shrink:0}
+.pi{padding:13px 18px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .15s}
+.pi:hover{background:var(--surface2)}.pi:last-child{border-bottom:none}
+.pi.sel{background:rgba(59,130,246,.08);border-left:2px solid #3b82f6}
+.pi-top{display:flex;align-items:flex-start;gap:7px;margin-bottom:5px}
+.pi-subj{font-size:13px;font-weight:600;line-height:1.3;flex:1}
+.pi-meta{font-size:11px;color:var(--muted)}
+.pi-action{font-size:11px;color:#60a5fa;margin-top:3px}
+.udot{width:7px;height:7px;border-radius:50%;background:var(--critical);flex-shrink:0;margin-top:3px;animation:pulse 1.4s infinite}
+
+.sev{padding:2px 7px;border-radius:5px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;flex-shrink:0}
+.sev-critical{background:var(--critical-bg);color:var(--critical);border:1px solid var(--critical-bd)}
+.sev-high{background:var(--high-bg);color:var(--high);border:1px solid var(--high-bd)}
+.sev-medium{background:var(--medium-bg);color:var(--medium);border:1px solid var(--medium-bd)}
+.sev-low{background:var(--low-bg);color:var(--low);border:1px solid var(--low-bd)}
+.sev-info{background:var(--info-bg);color:var(--info);border:1px solid var(--info-bd)}
+
+.right{display:flex;flex-direction:column;gap:16px}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.cpanel{background:var(--surface);border-radius:12px;border:1px solid var(--border);padding:18px}
+.cpanel h3{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:14px}
+.cwrap{position:relative;height:185px}
+
+.tbar{padding:12px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tbar h2{font-size:14px;font-weight:700;flex:1}
+.srch{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:7px 12px;color:var(--text);font-size:13px;outline:none;width:180px}
+.srch:focus{border-color:#3b82f6}
+.fsel{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--text);font-size:13px;outline:none;cursor:pointer}
+.twrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+thead{background:var(--bg)}
+th{padding:9px 14px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);white-space:nowrap}
+td{padding:10px 14px;border-top:1px solid rgba(255,255,255,.04);font-size:13px;vertical-align:middle}
+tr:hover td{background:rgba(255,255,255,.02)}
+tr.sel td{background:rgba(59,130,246,.06)}
+.td-s{max-width:260px}.td-s strong{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.td-s span{font-size:11px;color:var(--muted)}
+.td-sys{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px}
+.td-act{font-size:12px;color:#60a5fa;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{background:rgba(255,255,255,.07);border-radius:5px;padding:2px 7px;font-size:11px;white-space:nowrap}
+.ui{color:var(--critical)}
+.empty{text-align:center;padding:50px;color:var(--muted)}
+tr.user-resolved td{opacity:.45}
+tr.user-resolved .td-s strong{text-decoration:line-through}
+.pi.user-resolved{opacity:.4}
+.pi.user-resolved .pi-subj{text-decoration:line-through}
+.resolve-btn{background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-size:11px;font-weight:600;padding:3px 8px;cursor:pointer;white-space:nowrap;transition:all .15s;display:inline-flex;align-items:center;gap:4px}
+.resolve-btn:hover{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.4);color:#4ade80}
+.resolve-btn.resolved{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.4);color:#4ade80}
+.resolve-btn svg{width:11px;height:11px}
+.btn-resolve-big{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;color:#4ade80;font-size:13px;font-weight:600;padding:10px 18px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all .15s;width:100%}
+.btn-resolve-big:hover{background:rgba(34,197,94,.18)}
+.btn-resolve-big.resolved{background:rgba(100,116,139,.1);border-color:var(--border);color:var(--muted)}
+.btn-resolve-big svg{width:16px;height:16px}
+.res-tick{color:#34d399;flex-shrink:0;margin-top:3px}
+
+.pgn{padding:11px 18px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.pgn span{font-size:12px;color:var(--muted);flex:1}
+.pgbtn{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 11px;color:var(--text);font-size:12px;cursor:pointer}
+.pgbtn:hover{border-color:#4b5563}.pgbtn:disabled{opacity:.3;cursor:not-allowed}
+
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:200}
+.overlay.hidden{display:none}
+.dm{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:640px;max-width:95vw;max-height:85vh;overflow-y:auto}
+.dm-hdr{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px;position:sticky;top:0;background:var(--surface);z-index:1}
+.dm-hdr h2{font-size:15px;font-weight:700;flex:1;line-height:1.35}
+.dm-close{background:transparent;border:none;color:var(--muted);cursor:pointer;padding:4px;border-radius:6px}.dm-close:hover{color:var(--text);background:var(--surface2)}
+.dm-body{padding:20px 24px}
+.dm-meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}
+.mi label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);display:block;margin-bottom:3px}
+.mi span{font-size:13px}
+.ds{margin-bottom:14px}
+.ds h4{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:7px}
+.ds p{font-size:13px;line-height:1.6}
+.bprev{background:var(--bg);border-radius:8px;padding:13px;font-size:12px;line-height:1.6;color:var(--muted);white-space:pre-wrap;max-height:200px;overflow-y:auto;font-family:Consolas,monospace}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{background:rgba(59,130,246,.15);color:#93c5fd;border-radius:5px;padding:3px 8px;font-size:11px}
+.abox{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:8px;padding:12px}
+.abox h4{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#4ade80;margin-bottom:6px}
+.abox p{font-size:13px;color:#86efac}
+.urg-banner{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;font-weight:600;color:var(--critical)}
+.res-banner{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;font-weight:600;color:#34d399}
+
+/* Checkboxes & selection */
+input[type=checkbox]{accent-color:#3b82f6;width:14px;height:14px;cursor:pointer;vertical-align:middle}
+th.cb-col,td.cb-col{width:36px;padding:8px 8px 8px 14px}
+tr.tbl-sel td{background:rgba(59,130,246,.1)!important}
+
+/* Bulk action bar */
+.bulk-bar{padding:9px 18px;display:flex;align-items:center;gap:10px;background:rgba(59,130,246,.07);border-bottom:1px solid rgba(59,130,246,.18)}
+.bulk-bar.hidden{display:none}
+.bulk-count{font-size:13px;color:var(--text);font-weight:600;flex:1}
+.btn-sm{padding:5px 13px;font-size:12px}
+
+/* Resolved section */
+.res-section{margin-top:18px;background:var(--surface);border-radius:12px;border:1px solid var(--border);overflow:hidden}
+.res-hdr{padding:13px 18px;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;transition:background .15s}
+.res-hdr:hover{background:var(--surface2)}
+.res-hdr h2{font-size:14px;font-weight:700;flex:1}
+.res-badge{background:#10b981;color:#fff;border-radius:100px;padding:2px 8px;font-size:11px;font-weight:700;margin-left:6px}
+.res-chevron{transition:transform .2s;color:var(--muted)}
+.res-chevron.open{transform:rotate(180deg)}
+.res-body{border-top:1px solid var(--border)}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="logo-icon">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+  </div>
+  <div class="logo"><h1>Alert Intelligence</h1><span>EML Folder Monitor</span></div>
+  <div class="hdr-space"></div>
+  <button class="btn btn-ghost" id="btnRefresh" style="display:none" onclick="refreshFolder()">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+    Refresh
+  </button>
+  <button class="btn btn-ghost" id="btnClear" style="display:none" onclick="clearAll()">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+    Clear
+  </button>
+  <button class="btn btn-primary" id="btnFolder" onclick="selectFolder()">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
+    Select Folder
+  </button>
+</header>
+
+<!-- Monitoring status bar -->
+<div class="sbar hidden" id="sbar">
+  <span class="sdot active" id="sdot"></span>
+  <span>Monitoring</span>
+  <span class="sbar-folder" id="sbarFolder"></span>
+  <span style="color:var(--border)">·</span>
+  <span id="sbarCount"></span>
+  <span class="sbar-sp"></span>
+  <span id="sbarTime" style="font-size:11px;color:var(--muted)"></span>
+  <span class="sbar-countdown" id="sbarCountdown"></span>
+</div>
+
+<!-- Detail overlay -->
+<div class="overlay hidden" id="detailOverlay" onclick="closeDetailBg(event)">
+  <div class="dm" id="dm"></div>
+</div>
+
+<main>
+  <!-- Welcome -->
+  <div class="welcome" id="welcome">
+    <div class="welcome-card">
+      <svg class="hero" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
+      <h2>Alert Intelligence</h2>
+      <p>Point the dashboard at a folder of <code style="background:rgba(59,130,246,.15);color:#93c5fd;border-radius:4px;padding:1px 6px;font-size:12px">.eml</code> files and it will analyse and triage your alert emails automatically — no PST export or JSON conversion required.</p>
+      <div class="steps">
+        <div class="step"><div class="step-n">1</div><div class="step-t">Click <strong>Select Folder</strong> and choose the folder containing your <code>.eml</code> alert emails</div></div>
+        <div class="step"><div class="step-n">2</div><div class="step-t">The dashboard reads every <code>.eml</code> file, analyses severity, and builds your priority queue</div></div>
+        <div class="step"><div class="step-n">3</div><div class="step-t">Auto-refreshes every 60 seconds — new files saved to the folder appear automatically</div></div>
+      </div>
+      <div id="compatWarn" class="compat-warn">
+        <strong>Browser not supported.</strong> The Folder Access API requires Chrome 86+ or Edge 86+. Please open this page in a recent version of Chrome or Edge.
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px 16px" onclick="selectFolder()">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
+        Select EML Folder
+      </button>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div class="page" id="dash" style="display:none">
+    <div class="srow" id="srow"></div>
+    <div class="grid">
+      <div class="panel" id="pqPanel">
+        <div class="ph">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:15px;height:15px;color:var(--critical)"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+          <h2>Priority Queue</h2>
+          <span class="badge" id="urgBadge">0</span>
+        </div>
+        <div class="plist" id="plist"></div>
+      </div>
+      <div class="right">
+        <div class="charts">
+          <div class="cpanel"><h3>By Severity</h3><div class="cwrap"><canvas id="sevChart"></canvas></div></div>
+          <div class="cpanel"><h3>By Category</h3><div class="cwrap"><canvas id="catChart"></canvas></div></div>
+        </div>
+        <div class="panel" id="alertsPanel">
+          <div class="tbar">
+            <h2>All Alerts</h2>
+            <input class="srch" type="text" placeholder="Search…" id="srch" oninput="filter()">
+            <select class="fsel" id="fSev" onchange="filter()">
+              <option value="">All severities</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+              <option value="info">Info</option>
+            </select>
+            <select class="fsel" id="fCat" onchange="filter()"></select>
+          </div>
+          <div class="bulk-bar hidden" id="bulkBar">
+            <span class="bulk-count" id="bulkCount"></span>
+            <button class="btn btn-primary btn-sm" onclick="resolveSelected()">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:13px;height:13px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              Resolve Selected
+            </button>
+            <button class="btn btn-ghost btn-sm" onclick="clearSelection()">Cancel</button>
+          </div>
+          <div class="twrap">
+            <table>
+              <thead><tr>
+                <th class="cb-col"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)" title="Select all on page"></th>
+                <th>Severity</th><th>Subject</th>
+                <th>System</th><th>Category</th><th>Recommended Action</th><th>Date</th><th></th>
+              </tr></thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+          <div class="pgn">
+            <span id="pgnInfo"></span>
+            <button class="pgbtn" id="prevBtn" onclick="pg(-1)">&#8592; Prev</button>
+            <button class="pgbtn" id="nextBtn" onclick="pg(1)">Next &#8594;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resolved section -->
+    <div class="res-section" id="resSection" style="display:none">
+      <div class="res-hdr" onclick="toggleResolvedPanel()">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:15px;height:15px;color:#10b981"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <h2>Resolved <span class="res-badge" id="resBadge">0</span></h2>
+        <svg class="res-chevron" id="resChevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </div>
+      <div class="res-body" id="resBody" style="display:none">
+        <div class="twrap">
+          <table>
+            <thead><tr>
+              <th>Severity</th><th>Subject</th><th>System</th><th>Category</th><th>Date</th><th></th>
+            </tr></thead>
+            <tbody id="resTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const PER_PAGE = 25;
+const REFRESH_INTERVAL = 60; // seconds
+
+let allAlerts = [], filtered = [], page = 0;
+let resolvedAlerts = [], resolvedPanelOpen = false;
+let selectedIds = new Set();
+let sevChart = null, catChart = null, selId = null;
+let watchHandle = null, watchInterval = null, countdownInterval = null;
+let isScanning = false, nextRefreshAt = null;
+
+const LS_KEY = 'alert-dashboard-resolved';
+let resolvedIds = new Set(JSON.parse(localStorage.getItem(LS_KEY) || '[]'));
+
+function saveResolved() { localStorage.setItem(LS_KEY, JSON.stringify([...resolvedIds])); }
+
+async function ensureWritePermission() {
+  if (!watchHandle) return false;
+  try {
+    const cur = await watchHandle.queryPermission({ mode: 'readwrite' });
+    if (cur === 'granted') return true;
+    const req = await watchHandle.requestPermission({ mode: 'readwrite' });
+    return req === 'granted';
+  } catch {
+    return false;
+  }
+}
+
+async function moveFileToResolved(id, { skipRender = false } = {}) {
+  const rec = allAlerts.find(a => a.id === id);
+  if (!rec || !rec.filename || !watchHandle) return false;
+  try {
+    const resolvedDir = await watchHandle.getDirectoryHandle('Resolved', { create: true });
+    const srcHandle   = await watchHandle.getFileHandle(rec.filename);
+    const file        = await srcHandle.getFile();
+    const buf         = await file.arrayBuffer();
+    const destHandle  = await resolvedDir.getFileHandle(rec.filename, { create: true });
+    const writable    = await destHandle.createWritable();
+    await writable.write(buf);
+    await writable.close();
+    await watchHandle.removeEntry(rec.filename);
+    allAlerts = allAlerts.filter(a => a.id !== id);
+    resolvedIds.delete(id);
+    saveResolved();
+    if (!skipRender) {
+      if (selId === id) { document.getElementById('detailOverlay').classList.add('hidden'); selId = null; }
+      buildSummary(); buildCharts(); buildPriority(); populateFilters(); filter();
+    }
+    return true;
+  } catch (e) {
+    console.error('Move to Resolved failed:', e);
+    if (!skipRender) window.alert('Could not move file to Resolved folder: ' + e.message);
+    return false;
+  }
+}
+
+function toggleResolved(id, event) {
+  if (event) event.stopPropagation();
+  moveFileToResolved(id);
+}
+
+// ── Selection & bulk resolve ───────────────────────────────────
+function toggleSelect(id, event) {
+  if (event) event.stopPropagation();
+  if (selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id);
+  updateBulkBar();
+}
+
+function toggleSelectAll(checked) {
+  const page_items = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
+  page_items.forEach(a => checked ? selectedIds.add(a.id) : selectedIds.delete(a.id));
+  updateBulkBar();
+  renderTable();
+}
+
+function clearSelection() {
+  selectedIds.clear();
+  updateBulkBar();
+  renderTable();
+}
+
+function updateBulkBar() {
+  const n = selectedIds.size;
+  document.getElementById('bulkBar').classList.toggle('hidden', n === 0);
+  document.getElementById('bulkCount').textContent = `${n} alert${n === 1 ? '' : 's'} selected`;
+  const sa = document.getElementById('selectAll');
+  if (sa) {
+    const page_items = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
+    sa.checked = page_items.length > 0 && page_items.every(a => selectedIds.has(a.id));
+    sa.indeterminate = !sa.checked && page_items.some(a => selectedIds.has(a.id));
+  }
+}
+
+async function resolveSelected() {
+  const ids = [...selectedIds];
+  if (!ids.length) return;
+  if (!await ensureWritePermission()) {
+    window.alert('Write permission is required.\nPlease click "Clear", re-select the folder, and grant write access when prompted.');
+    return;
+  }
+  selectedIds.clear();
+  updateBulkBar();
+  let failed = 0;
+  for (const id of ids) {
+    const ok = await moveFileToResolved(id, { skipRender: true });
+    if (!ok) failed++;
+  }
+  if (selId && !allAlerts.find(a => a.id === selId)) {
+    document.getElementById('detailOverlay').classList.add('hidden');
+    selId = null;
+  }
+  buildSummary(); buildCharts(); buildPriority(); populateFilters(); filter();
+  if (failed) window.alert(`${failed} file(s) could not be moved to the Resolved folder.`);
+}
+
+// ── Browser compatibility check ────────────────────────────────
+if (!('showDirectoryPicker' in window)) {
+  document.getElementById('compatWarn').style.display = 'block';
+}
+
+// ── Stable numeric ID from filename ───────────────────────────
+function strHash(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = Math.imul(31, h) + s.charCodeAt(i) | 0;
+  return Math.abs(h);
+}
+
+
+// ── Folder selection ───────────────────────────────────────────
+async function selectFolder() {
+  if (!('showDirectoryPicker' in window)) {
+    alert('Your browser does not support the Folder Access API.\nPlease use Chrome 86+ or Edge 86+.');
+    return;
+  }
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    watchHandle = handle;
+    document.getElementById('sbarFolder').textContent = handle.name;
+    document.getElementById('sbar').classList.remove('hidden');
+    document.getElementById('btnRefresh').style.display = '';
+    document.getElementById('btnClear').style.display = '';
+    document.getElementById('btnFolder').style.display = 'none';
+    await scanFolder();
+    startAutoRefresh();
+  } catch (e) {
+    if (e.name !== 'AbortError') alert('Could not open folder: ' + e.message);
+  }
+}
+
+async function refreshFolder() {
+  if (!watchHandle || isScanning) return;
+  stopAutoRefresh();
+  await scanFolder();
+  startAutoRefresh();
+}
+
+// ── EML parser ─────────────────────────────────────────────────
+function decodeEncodedWords(str) {
+  return (str || '').replace(/=\?([^?]+)\?([BQbq])\?([^?]*)\?=/g, (_, charset, enc, text) => {
+    try {
+      if (enc.toUpperCase() === 'B') {
+        const bytes = Uint8Array.from(atob(text), c => c.charCodeAt(0));
+        return new TextDecoder(charset).decode(bytes);
+      }
+      return text.replace(/_/g, ' ').replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+    } catch { return text; }
+  });
+}
+
+function decodeTransferEncoding(body, cte) {
+  const enc = (cte || '').trim().toLowerCase();
+  if (enc === 'base64') {
+    try {
+      const bytes = Uint8Array.from(atob(body.replace(/\s+/g, '')), c => c.charCodeAt(0));
+      return new TextDecoder('utf-8').decode(bytes);
+    } catch { return body; }
+  }
+  if (enc === 'quoted-printable') {
+    return body.replace(/=\r?\n/g, '').replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+  }
+  return body;
+}
+
+function parseEml(text) {
+  const norm = text.replace(/\r\n/g, '\n');
+  const split = norm.indexOf('\n\n');
+  const headerText = split !== -1 ? norm.substring(0, split) : norm;
+  let bodyText = split !== -1 ? norm.substring(split + 2) : '';
+
+  // Unfold continuation lines
+  const unfolded = headerText.replace(/\n[ \t]+/g, ' ');
+
+  const headers = {};
+  for (const line of unfolded.split('\n')) {
+    const colon = line.indexOf(':');
+    if (colon < 1) continue;
+    const key = line.substring(0, colon).toLowerCase().trim();
+    if (!(key in headers)) headers[key] = line.substring(colon + 1).trim();
+  }
+
+  const subject = decodeEncodedWords(headers['subject'] || '');
+  const from    = decodeEncodedWords(headers['from']    || '');
+  const date    = headers['date'] || null;
+  const ct      = headers['content-type'] || '';
+  const cte     = headers['content-transfer-encoding'] || '';
+
+  // Extract plain text from multipart
+  const boundaryMatch = ct.match(/boundary=["']?([^"';\s]+)["']?/i);
+  if (boundaryMatch) {
+    const boundary = '--' + boundaryMatch[1];
+    const escaped  = boundary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const parts    = bodyText.split(new RegExp('(?:^|\n)' + escaped + '(?:--)?(?:\n|$)', 'g'));
+    for (const part of parts) {
+      const ps = part.indexOf('\n\n');
+      if (ps === -1) continue;
+      const ph = part.substring(0, ps).toLowerCase();
+      const pb = part.substring(ps + 2);
+      if (ph.includes('text/plain')) {
+        const partCte = (ph.match(/content-transfer-encoding:\s*(\S+)/i) || [])[1] || '';
+        bodyText = decodeTransferEncoding(pb, partCte);
+        break;
+      }
+    }
+  } else {
+    bodyText = decodeTransferEncoding(bodyText, cte);
+  }
+
+  return { subject, from, date, body: bodyText.trim() };
+}
+
+// ── Scan folder for .eml files ─────────────────────────────────
+async function scanFolder() {
+  if (isScanning || !watchHandle) return;
+  isScanning = true;
+
+  const dot = document.getElementById('sdot');
+  dot.classList.remove('active');
+  dot.classList.add('scanning');
+  document.getElementById('sbarTime').textContent = 'Scanning…';
+  document.getElementById('sbarCountdown').textContent = '';
+
+  const emails = [];
+  try {
+    for await (const [name, entry] of watchHandle.entries()) {
+      if (entry.kind !== 'file' || !name.toLowerCase().endsWith('.eml')) continue;
+      try {
+        const file = await entry.getFile();
+        const text = await file.text();
+        const info = parseEml(text);
+        emails.push({
+          id:       strHash(name),
+          filename: name,
+          subject:  info.subject || name.replace(/\.eml$/i, ''),
+          sender:   info.from,
+          date:     info.date ? new Date(info.date).toISOString() : null,
+          body:     info.body,
+          folder:   watchHandle.name,
+        });
+      } catch (err) {
+        console.warn('Skipped (parse error):', name, err);
+      }
+    }
+  } catch (e) {
+    console.error('Folder scan error:', e);
+  }
+
+  emails.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+  // Scan Resolved/ subfolder
+  const resolved = [];
+  try {
+    const resolvedDir = await watchHandle.getDirectoryHandle('Resolved');
+    for await (const [name, entry] of resolvedDir.entries()) {
+      if (entry.kind !== 'file' || !name.toLowerCase().endsWith('.eml')) continue;
+      try {
+        const file = await entry.getFile();
+        const text = await file.text();
+        const info = parseEml(text);
+        resolved.push({
+          id:       strHash('r:' + name),
+          filename: name,
+          subject:  info.subject || name.replace(/\.eml$/i, ''),
+          sender:   info.from,
+          date:     info.date ? new Date(info.date).toISOString() : null,
+          body:     info.body,
+          folder:   'Resolved',
+        });
+      } catch {}
+    }
+  } catch {} // Resolved folder doesn't exist yet — that's fine
+  resolved.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+  const t = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  document.getElementById('sbarCount').textContent = `${emails.length} active · ${resolved.length} resolved`;
+  document.getElementById('sbarTime').textContent  = `Last scan: ${t}`;
+  dot.classList.remove('scanning');
+  dot.classList.add('active');
+
+  isScanning = false;
+  loadData(emails, resolved);
+}
+
+// ── Auto-refresh with countdown ────────────────────────────────
+function startAutoRefresh() {
+  stopAutoRefresh();
+  nextRefreshAt = Date.now() + REFRESH_INTERVAL * 1000;
+
+  watchInterval = setInterval(async () => {
+    await scanFolder();
+    nextRefreshAt = Date.now() + REFRESH_INTERVAL * 1000;
+  }, REFRESH_INTERVAL * 1000);
+
+  countdownInterval = setInterval(() => {
+    if (!nextRefreshAt) return;
+    const secs = Math.max(0, Math.round((nextRefreshAt - Date.now()) / 1000));
+    document.getElementById('sbarCountdown').textContent = `· refresh in ${secs}s`;
+  }, 1000);
+}
+
+function stopAutoRefresh() {
+  clearInterval(watchInterval);
+  clearInterval(countdownInterval);
+  watchInterval = countdownInterval = null;
+  nextRefreshAt = null;
+  document.getElementById('sbarCountdown').textContent = '';
+}
+
+// ── Load and render ────────────────────────────────────────────
+function loadData(raw, rawResolved = []) {
+  const sevOrd = { critical:0, high:1, medium:2, low:3, info:4 };
+  allAlerts = raw.map(e => {
+    const r = analyzeEmail(e);
+    return {
+      id: e.id, filename: e.filename || null,
+      subject: e.subject || '(no subject)', sender: e.sender || '',
+      date: e.date || null, folder: e.folder || '', bodyPreview: (e.body || '').substring(0, 400),
+      severity: r.sev, category: r.cat, affectedSystem: r.sys,
+      summary: r.summary, action: r.action, urgent: r.urgent,
+      tags: r.tags, isResolved: r.isResolved,
+    };
+  }).sort((a, b) => {
+    if (a.urgent !== b.urgent) return a.urgent ? -1 : 1;
+    return (sevOrd[a.severity] ?? 5) - (sevOrd[b.severity] ?? 5);
+  });
+
+  resolvedAlerts = rawResolved.map(e => {
+    const r = analyzeEmail(e);
+    return { id: e.id, filename: e.filename, subject: e.subject || '(no subject)',
+      sender: e.sender || '', date: e.date || null, severity: r.sev,
+      category: r.cat, affectedSystem: r.sys };
+  });
+
+  document.getElementById('welcome').style.display = 'none';
+  document.getElementById('dash').style.display = '';
+  buildSummary(); buildCharts(); buildPriority(); populateFilters(); filter();
+  renderResolvedPanel();
+  requestAnimationFrame(syncPqHeight);
+}
+
+function clearAll() {
+  if (!confirm('Stop monitoring and clear all alerts?')) return;
+  stopAutoRefresh();
+  watchHandle = null; allAlerts = []; filtered = []; resolvedAlerts = [];
+  selectedIds.clear();
+  document.getElementById('btnRefresh').style.display = 'none';
+  document.getElementById('btnClear').style.display = 'none';
+  document.getElementById('btnFolder').style.display = '';
+  document.getElementById('dash').style.display = 'none';
+  document.getElementById('welcome').style.display = '';
+  document.getElementById('sbar').classList.add('hidden');
+  document.getElementById('bulkBar').classList.add('hidden');
+  document.getElementById('resSection').style.display = 'none';
+  if (sevChart) { sevChart.destroy(); sevChart = null; }
+  if (catChart) { catChart.destroy(); catChart = null; }
+}
+
+// ── Rule-based analysis ────────────────────────────────────────
+function analyzeEmail(email) {
+  const subj = (email.subject || '').trim();
+  const body = (email.body || '').toLowerCase();
+  const sl = subj.toLowerCase();
+
+  const isResolved   = /^resolved in \d/.test(sl);
+  const isProblem    = /^problem:/.test(sl);
+  const isEscalation = /escalation repeat/.test(sl);
+  const isCrashPlan  = /crashplan/.test(sl);
+  const isLogwatch   = /^logwatch for/.test(sl);
+  const isDRA        = /^dra\s*-/.test(sl);
+  const isFirewall   = /firewall alarm/.test(sl);
+  const isPower      = /power event/i.test(sl);
+  const isPRTG       = /prtg network monitor/i.test(sl);
+  const isDown       = /\bdown\b/.test(sl) && !isResolved;
+
+  let sev, urgent;
+  if (isEscalation)                                          { sev='critical'; urgent=true; }
+  else if (isFirewall)                                       { sev='critical'; urgent=true; }
+  else if (/disk space is critical/i.test(subj))             { sev='critical'; urgent=true; }
+  else if (isResolved)                                       { sev='info';     urgent=false; }
+  else if (isProblem) {
+    if (/cpu usage high|high memory utilization|memory utilization|pages.sec.*too high|cpu queue.*too high|high cpu utilization/i.test(subj))
+                                                             { sev='high';   urgent=true; }
+    else if (/interface.*link down|link down|eth\d/i.test(subj))
+                                                             { sev='high';   urgent=true; }
+    else if (/proxy.*last seen|zabbix proxy.*last seen/i.test(subj))
+                                                             { sev='high';   urgent=true; }
+    else if (/disk space/i.test(subj))                       { sev='high';   urgent=true; }
+    else if (/has been restarted|uptime\s*</i.test(subj))    { sev='medium'; urgent=false; }
+    else                                                     { sev='medium'; urgent=false; }
+  }
+  else if (isPower)                                          { sev='high';   urgent=true; }
+  else if (isPRTG)                                           { sev='medium'; urgent=false; }
+  else if (isCrashPlan) {
+    const bad = /fail|error/i.test(body + subj);
+    sev = bad ? 'medium' : 'low'; urgent = bad;
+  }
+  else if (isLogwatch)                                       { sev='info';   urgent=false; }
+  else if (isDRA) {
+    sev = /fail|error|critical/i.test(subj) ? 'high' : 'low';
+    urgent = sev === 'high';
+  }
+  else if (isDown)                                           { sev='high';   urgent=true; }
+  else                                                       { sev='medium'; urgent=false; }
+
+  let cat;
+  if (/interface|eth\d|link down|ping.*down|dns.*down|rdp.*down|prtg network|summarized notification/i.test(subj)) cat='Network';
+  else if (/cpu|memory|pages.sec|cpu queue|cpu utilization|memory utilization/i.test(subj)) cat='Performance';
+  else if (/disk space/i.test(subj)) cat='Storage';
+  else if (/crashplan|backup/i.test(subj)) cat='Backup/Recovery';
+  else if (/firewall/i.test(subj)) cat='Security';
+  else if (/power event|ups/i.test(subj)) cat='Power';
+  else if (/proxy.*zabbix|zabbix proxy|has been restarted|uptime/i.test(subj)) cat='Infrastructure';
+  else if (/logwatch|patrol read|raid|dra\s*-/i.test(subj)) cat='System';
+  else cat='Other';
+
+  const sys = extractSystem(subj);
+
+  let summary;
+  if (isResolved) {
+    const dur = subj.match(/Resolved in ([^:]+):/i);
+    const what = subj.replace(/^Resolved in [^:]+:\s*/i, '');
+    summary = `Resolved: ${what}${dur ? ` (in ${dur[1]})` : ''}`;
+  } else if (isEscalation) {
+    summary = `ESCALATION: ${subj} — repeated without resolution`;
+  } else if (isProblem) {
+    summary = `Active problem: ${subj.replace(/^Problem:\s*/i, '')}`;
+  } else if (isDRA) {
+    summary = subj.replace(/^DRA\s*-\s*[\w.]+:\s*/i, '');
+  } else {
+    summary = subj;
+  }
+
+  let action = 'Monitor and review';
+  if (isEscalation) {
+    if (/rdp/i.test(subj))       action='Check Remote Desktop service on domain controller — repeated escalation';
+    else if (/dns/i.test(subj))  action='Investigate DNS service failure — repeated escalation';
+    else if (/ping/i.test(subj)) action='Verify host availability — repeated escalation';
+    else                         action='Investigate immediately — repeated escalation without resolution';
+  } else if (isFirewall)         { action='Review firewall logs immediately for security incident'; }
+  else if (/disk space is critical/i.test(subj)) { action='Free disk space immediately on '+sys; }
+  else if (/link down|interface.*down/i.test(subj)) { action='Check network interface and physical connection'; }
+  else if (/cpu usage high|high cpu utilization/i.test(subj)) { action='Investigate high-CPU process on '+sys; }
+  else if (/memory.*utilization|pages.sec.*too high|high memory/i.test(subj)) { action='Check for memory leak or increase RAM on '+sys; }
+  else if (/cpu queue.*too high/i.test(subj)) { action='Investigate CPU queue length on '+sys; }
+  else if (/dns.*down/i.test(subj))  { action='Check DNS service health on domain controllers'; }
+  else if (/rdp.*down/i.test(subj))  { action='Restart Remote Desktop service on '+sys; }
+  else if (/ping.*down/i.test(subj)) { action='Verify host '+sys+' is online'; }
+  else if (/proxy.*last seen/i.test(subj)) { action='Check Zabbix proxy service status and connectivity'; }
+  else if (/disk space/i.test(subj)) { action='Clean up disk space or expand storage on '+sys; }
+  else if (isPower)              { action='Check UPS status and review power event details'; }
+  else if (isCrashPlan)          { action='Review CrashPlan backup report for failures'; }
+  else if (isResolved)           { action='No action required — resolved automatically'; }
+  else if (isDRA)                { action='Review hardware status via iDRAC for '+sys; }
+  else if (isLogwatch)           { action='Review log summary for anomalies'; }
+  else if (/has been restarted/i.test(subj)) { action='Investigate unexpected restart of '+sys; }
+
+  const tags = [];
+  if (/zabbix/i.test(subj+body))  tags.push('Zabbix');
+  if (/prtg/i.test(subj))         tags.push('PRTG');
+  if (isCrashPlan)                 tags.push('CrashPlan');
+  if (isResolved)                  tags.push('Resolved');
+  if (isEscalation)                tags.push('Escalation');
+  if (isProblem && !isResolved)    tags.push('Active');
+  if (/nas/i.test(subj))           tags.push('NAS');
+  if (/\bdc\d+\b|syddc|lfcsdc|lfcs-dc/i.test(subj)) tags.push('Domain Controller');
+  if (isPower)                     tags.push('Power');
+  if (isDRA)                       tags.push('Hardware');
+
+  return { sev, cat, sys, summary, action, urgent, tags, isResolved };
+}
+
+function extractSystem(subj) {
+  const onM = subj.match(/\bon\s+([A-Z][A-Z0-9-]+)/i);        if (onM) return onM[1];
+  const dcM = subj.match(/\b(?:SYD|LFC|OML|WAR|KIN|MUR|YOU|RSF)[A-Z]*DC\d+\b/i); if (dcM) return dcM[0];
+  const draM = subj.match(/DRA\s*-\s*([\w.-]+?)(?:\s*:|\.admin)/i); if (draM) return draM[1].split('.')[0];
+  const prtgM = subj.match(/\(([A-Z][A-Z0-9-]{2,})\)/i);      if (prtgM) return prtgM[1];
+  const proxyM = subj.match(/\[([A-Z][A-Z0-9-]{3,})\]/i);     if (proxyM) return proxyM[1];
+  const hostM = subj.match(/\b([A-Z]{2,6}-[A-Z]{2,}[A-Z0-9-]*)\b/i); if (hostM) return hostM[1];
+  return 'Unknown';
+}
+
+// ── Summary cards ──────────────────────────────────────────────
+function buildSummary() {
+  const c={critical:0,high:0,medium:0,low:0,info:0}; let res=0, userRes=0;
+  allAlerts.forEach(a=>{
+    if(!resolvedIds.has(a.id)&&c[a.severity]!==undefined) c[a.severity]++;
+    if(a.isResolved) res++;
+    if(resolvedIds.has(a.id)) userRes++;
+  });
+  document.getElementById('srow').innerHTML=`
+    <div class="scard total"><div class="n">${allAlerts.length}</div><div class="l">Total</div></div>
+    <div class="scard critical"><div class="n">${c.critical}</div><div class="l">Critical</div></div>
+    <div class="scard high"><div class="n">${c.high}</div><div class="l">High</div></div>
+    <div class="scard medium"><div class="n">${c.medium}</div><div class="l">Medium</div></div>
+    <div class="scard low"><div class="n">${c.low}</div><div class="l">Low</div></div>
+    <div class="scard info"><div class="n">${c.info}</div><div class="l">Info</div></div>
+    <div class="scard auto-resolved"><div class="n">${res}</div><div class="l">Auto Resolved</div></div>
+    <div class="scard resolved"><div class="n">${resolvedAlerts.length}</div><div class="l">Resolved</div></div>`;
+}
+
+function buildCharts() {
+  const SC={critical:'#ef4444',high:'#f97316',medium:'#eab308',low:'#22c55e',info:'#3b82f6'};
+  const sevC={},catC={};
+  allAlerts.forEach(a=>{sevC[a.severity]=(sevC[a.severity]||0)+1;catC[a.category]=(catC[a.category]||0)+1;});
+  if(sevChart)sevChart.destroy();
+  sevChart=new Chart(document.getElementById('sevChart'),{
+    type:'doughnut',
+    data:{labels:Object.keys(sevC),datasets:[{data:Object.values(sevC),backgroundColor:Object.keys(sevC).map(k=>SC[k]||'#64748b'),borderWidth:0}]},
+    options:{plugins:{legend:{labels:{color:'#94a3b8',font:{size:11},boxWidth:12}}},cutout:'62%'},
+  });
+  if(catChart)catChart.destroy();
+  const catE=Object.entries(catC).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  catChart=new Chart(document.getElementById('catChart'),{
+    type:'bar',
+    data:{labels:catE.map(([k])=>k),datasets:[{data:catE.map(([,v])=>v),backgroundColor:'rgba(139,92,246,.7)',borderRadius:5}]},
+    options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#64748b',font:{size:10}},grid:{color:'rgba(255,255,255,.05)'}},y:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false}}}},
+  });
+}
+
+function buildPriority() {
+  const sevOrd = { critical:0, high:1, medium:2, low:3, info:4 };
+  const urgent = allAlerts.filter(a => a.urgent || a.severity === 'critical');
+
+  // Group by normalised subject
+  const groupMap = new Map();
+  for (const a of urgent) {
+    const key = a.subject.toLowerCase().trim();
+    if (!groupMap.has(key)) groupMap.set(key, []);
+    groupMap.get(key).push(a);
+  }
+
+  const groups = [...groupMap.values()].map(alerts => {
+    const rep = alerts[0];
+    return { alerts, rep, count: alerts.length };
+  }).sort((a, b) => {
+    const sevDiff = (sevOrd[a.rep.severity] ?? 5) - (sevOrd[b.rep.severity] ?? 5);
+    return sevDiff !== 0 ? sevDiff : b.count - a.count;
+  });
+
+  document.getElementById('urgBadge').textContent = groups.length;
+  const list = document.getElementById('plist');
+
+  if (!groups.length) {
+    list.innerHTML = '<div style="padding:28px;text-align:center;color:var(--muted);font-size:13px">No urgent alerts.</div>';
+    return;
+  }
+
+  list.innerHTML = groups.map(g => {
+    const { rep, count } = g;
+    const isSelGroup = g.alerts.some(a => a.id === selId);
+    const ids = g.alerts.map(a => a.id).join(',');
+    return `
+    <div class="pi${isSelGroup ? ' sel' : ''}" onclick="selectAlert(${rep.id})">
+      <div class="pi-top">
+        ${rep.urgent ? '<span class="udot"></span>' : ''}
+        <span class="sev sev-${rep.severity}">${rep.severity}</span>
+        <span class="pi-subj">${esc(rep.subject)}</span>
+        ${count > 1 ? `<span class="grp-badge" title="${count} occurrences">${count}</span>` : ''}
+        <button class="resolve-btn" onclick="resolveGroupIds(event,[${ids}])" title="Resolve ${count > 1 ? 'all ' + count + ' occurrences' : 'this alert'}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          ${count > 1 ? `All (${count})` : 'Resolve'}
+        </button>
+      </div>
+      <div class="pi-meta">${esc(rep.affectedSystem)} &middot; ${esc(rep.category)} ${rep.date ? '&middot; ' + fmtDate(rep.date, true) : ''}</div>
+      ${rep.action ? `<div class="pi-action">&#8594; ${esc(rep.action)}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function unresolveAlert(filename) {
+  if (!watchHandle || !filename) return;
+  if (!await ensureWritePermission()) {
+    window.alert('Write permission is required.\nPlease click "Clear", re-select the folder, and grant write access when prompted.');
+    return;
+  }
+  try {
+    const resolvedDir = await watchHandle.getDirectoryHandle('Resolved');
+    const srcHandle   = await resolvedDir.getFileHandle(filename);
+    const file        = await srcHandle.getFile();
+    const buf         = await file.arrayBuffer();
+    const destHandle  = await watchHandle.getFileHandle(filename, { create: true });
+    const writable    = await destHandle.createWritable();
+    await writable.write(buf);
+    await writable.close();
+    await resolvedDir.removeEntry(filename);
+    await scanFolder();
+  } catch (e) {
+    console.error('Unresolve failed:', e);
+    window.alert('Could not move file back to active folder: ' + e.message);
+  }
+}
+
+async function resolveGroupIds(event, ids) {
+  event.stopPropagation();
+  if (!await ensureWritePermission()) {
+    window.alert('Write permission is required.\nPlease click "Clear", re-select the folder, and grant write access when prompted.');
+    return;
+  }
+  for (const id of ids) await moveFileToResolved(id, { skipRender: true });
+  if (selId && !allAlerts.find(a => a.id === selId)) {
+    document.getElementById('detailOverlay').classList.add('hidden');
+    selId = null;
+  }
+  buildSummary(); buildCharts(); buildPriority(); populateFilters(); filter();
+}
+
+function populateFilters() {
+  const cats=[...new Set(allAlerts.map(a=>a.category))].sort();
+  document.getElementById('fCat').innerHTML='<option value="">All categories</option>'+cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+}
+
+function filter() {
+  const q   = document.getElementById('srch').value.toLowerCase();
+  const sev = document.getElementById('fSev').value;
+  const cat = document.getElementById('fCat').value;
+  filtered = allAlerts.filter(a => {
+    if (sev && a.severity !== sev) return false;
+    if (cat && a.category !== cat) return false;
+    if (q) { const hay = (a.subject+a.sender+a.affectedSystem+a.category+a.summary).toLowerCase(); if (!hay.includes(q)) return false; }
+    return true;
+  });
+  page = 0; renderTable();
+}
+
+function renderTable() {
+  const chunk = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
+  const tbody = document.getElementById('tbody');
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty">No alerts match.</div></td></tr>`;
+  } else {
+    tbody.innerHTML = chunk.map(a => {
+      const isSel = selectedIds.has(a.id);
+      return `
+      <tr class="${a.id==selId?'sel':''} ${isSel?'tbl-sel':''}" onclick="selectAlert(${a.id})" style="cursor:pointer">
+        <td class="cb-col" onclick="event.stopPropagation()">
+          <input type="checkbox" ${isSel?'checked':''} onchange="toggleSelect(${a.id},event)">
+        </td>
+        <td>${a.urgent ? '<span class="ui">&#9888;</span>' : ''}</td>
+        <td><span class="sev sev-${a.severity}">${a.severity}</span></td>
+        <td class="td-s"><strong>${esc(a.subject)}</strong><span>${esc(a.sender)}</span></td>
+        <td class="td-sys" title="${esc(a.affectedSystem)}">${esc(a.affectedSystem)}</td>
+        <td><span class="chip">${esc(a.category)}</span></td>
+        <td class="td-act" title="${esc(a.action)}">${esc(a.action)}</td>
+        <td style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtDate(a.date)}</td>
+        <td onclick="event.stopPropagation()">
+          <button class="resolve-btn" onclick="toggleResolved(${a.id},event)" title="Move to Resolved">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Resolve
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+  const total=filtered.length,pages=Math.ceil(total/PER_PAGE);
+  document.getElementById('pgnInfo').textContent=`${total} alert${total===1?'':'s'}${allAlerts.length!==total?' (filtered)':''}`;
+  document.getElementById('prevBtn').disabled=page===0;
+  document.getElementById('nextBtn').disabled=page>=pages-1;
+  updateBulkBar();
+}
+
+function renderResolvedPanel() {
+  const sec = document.getElementById('resSection');
+  const badge = document.getElementById('resBadge');
+  const tbody = document.getElementById('resTbody');
+  const n = resolvedAlerts.length;
+  badge.textContent = n;
+  if (n === 0) { sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  tbody.innerHTML = resolvedAlerts.map(a => `
+    <tr>
+      <td><span class="sev sev-${a.severity}">${a.severity}</span></td>
+      <td class="td-s"><strong>${esc(a.subject)}</strong><span>${esc(a.sender)}</span></td>
+      <td class="td-sys">${esc(a.affectedSystem)}</td>
+      <td><span class="chip">${esc(a.category)}</span></td>
+      <td style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtDate(a.date)}</td>
+      <td><button class="resolve-btn" onclick="unresolveAlert('${esc(a.filename)}')" title="Move back to active">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+        Unresolve
+      </button></td>
+    </tr>`).join('');
+}
+
+function syncPqHeight() {
+  const alertsPanel = document.getElementById('alertsPanel');
+  const panel = document.getElementById('pqPanel');
+  const plist = document.getElementById('plist');
+  if (!alertsPanel || !panel || !plist) return;
+  const totalH = alertsPanel.getBoundingClientRect().bottom - panel.getBoundingClientRect().top;
+  if (totalH <= 0) return;
+  const ph = panel.querySelector('.ph');
+  const headerH = ph ? ph.getBoundingClientRect().height : 0;
+  panel.style.height = totalH + 'px';
+  plist.style.height = (totalH - headerH) + 'px';
+}
+
+function toggleResolvedPanel() {
+  resolvedPanelOpen = !resolvedPanelOpen;
+  document.getElementById('resBody').style.display = resolvedPanelOpen ? '' : 'none';
+  document.getElementById('resChevron').classList.toggle('open', resolvedPanelOpen);
+}
+
+function pg(d){page=Math.max(0,Math.min(Math.ceil(filtered.length/PER_PAGE)-1,page+d));renderTable();}
+
+function selectAlert(id) {
+  selId=id;
+  const a=allAlerts.find(x=>x.id==id); if(!a)return;
+  renderTable(); buildPriority();
+  document.getElementById('dm').innerHTML=`
+    <div class="dm-hdr">
+      <span class="sev sev-${a.severity}" style="margin-top:2px">${a.severity}</span>
+      <h2>${esc(a.subject)}</h2>
+      <button class="dm-close" onclick="document.getElementById('detailOverlay').classList.add('hidden')">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:18px;height:18px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="dm-body">
+      ${a.urgent?'<div class="urg-banner"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px;flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>Needs Immediate Attention</div>':''}
+      ${a.isResolved?'<div class="res-banner"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px;flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Resolved Automatically</div>':''}
+      <div class="dm-meta">
+        <div class="mi"><label>From</label><span>${esc(a.sender||'Unknown')}</span></div>
+        <div class="mi"><label>Date</label><span>${fmtDate(a.date)||'Unknown'}</span></div>
+        <div class="mi"><label>Affected System</label><span>${esc(a.affectedSystem)}</span></div>
+        <div class="mi"><label>Category</label><span>${esc(a.category)}</span></div>
+        <div class="mi"><label>Folder</label><span style="font-size:11px;color:var(--muted)">${esc(a.folder)}</span></div>
+      </div>
+      <div class="ds"><h4>Summary</h4><p>${esc(a.summary)}</p></div>
+      <div class="abox"><h4>Recommended Action</h4><p>${esc(a.action)}</p></div>
+      ${a.tags.length?`<div class="ds" style="margin-top:12px"><h4>Tags</h4><div class="tags">${a.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div></div>`:''}
+      ${a.bodyPreview?`<div class="ds" style="margin-top:12px"><h4>Email Body</h4><div class="bprev">${esc(a.bodyPreview)}</div></div>`:''}
+      <div style="margin-top:18px">
+        ${(()=>{const isRes=resolvedIds.has(a.id);return`<button class="btn-resolve-big${isRes?' resolved':''}" onclick="toggleResolved(${a.id},null)">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          ${isRes?'Undo Resolve':'Mark as Resolved'}
+        </button>`;})()}
+      </div>
+    </div>`;
+  document.getElementById('detailOverlay').classList.remove('hidden');
+}
+
+const _pqRO = new ResizeObserver(() => syncPqHeight());
+const _alertsEl = document.getElementById('alertsPanel');
+if (_alertsEl) _pqRO.observe(_alertsEl);
+
+function closeDetailBg(e){if(e.target===document.getElementById('detailOverlay'))document.getElementById('detailOverlay').classList.add('hidden');}
+function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function fmtDate(d,short){if(!d)return'';try{const dt=new Date(d);return short?dt.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}):dt.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});}catch{return d;}}
+</script>
+</body>
+</html>
