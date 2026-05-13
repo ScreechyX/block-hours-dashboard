@@ -325,7 +325,7 @@ th{position:relative}
           <div class="twrap">
             <table id="alertTable" class="resizable">
               <thead><tr>
-                <th class="cb-col"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)" title="Select all on page"></th>
+                <th class="cb-col"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)" title="Select all alerts"></th>
                 <th>Severity</th><th>Subject</th>
                 <th>System</th><th>Client</th><th>Category</th><th>Recommended Action</th><th>Date</th><th></th>
               </tr></thead>
@@ -522,8 +522,7 @@ function toggleSelect(id, event) {
 }
 
 function toggleSelectAll(checked) {
-  const page_items = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
-  page_items.forEach(a => checked ? selectedIds.add(a.id) : selectedIds.delete(a.id));
+  filtered.forEach(a => checked ? selectedIds.add(a.id) : selectedIds.delete(a.id));
   updateBulkBar();
   renderTable();
 }
@@ -540,9 +539,8 @@ function updateBulkBar() {
   document.getElementById('bulkCount').textContent = `${n} alert${n === 1 ? '' : 's'} selected`;
   const sa = document.getElementById('selectAll');
   if (sa) {
-    const page_items = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
-    sa.checked = page_items.length > 0 && page_items.every(a => selectedIds.has(a.id));
-    sa.indeterminate = !sa.checked && page_items.some(a => selectedIds.has(a.id));
+    sa.checked = filtered.length > 0 && filtered.every(a => selectedIds.has(a.id));
+    sa.indeterminate = !sa.checked && filtered.some(a => selectedIds.has(a.id));
   }
 }
 
