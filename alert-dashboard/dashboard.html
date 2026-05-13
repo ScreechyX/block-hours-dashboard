@@ -118,7 +118,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
 tr.sel td{background:rgba(59,130,246,.06)}
 .td-s{max-width:260px}.td-s strong{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.td-s span{font-size:11px;color:var(--muted)}
 .td-sys{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px}
-.td-act{font-size:12px;color:#60a5fa;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.td-act{font-size:12px;color:#60a5fa;overflow:hidden;max-width:0}.td-act-inner{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chip{background:rgba(255,255,255,.07);border-radius:5px;padding:2px 7px;font-size:11px;white-space:nowrap}
 .chip-client{background:rgba(59,130,246,.15);color:#93c5fd;border-radius:5px;padding:2px 7px;font-size:11px;font-weight:700;letter-spacing:.4px;white-space:nowrap;cursor:default}
 .chip-unknown{background:rgba(100,116,139,.15);color:var(--muted);border-radius:5px;padding:2px 7px;font-size:11px;font-weight:700;letter-spacing:.4px;white-space:nowrap;cursor:default;border:1px dashed rgba(100,116,139,.35)}
@@ -1284,7 +1284,7 @@ function renderTable() {
         <td class="td-sys" title="${esc(a.affectedSystem)}">${esc(a.affectedSystem)}</td>
         <td style="white-space:nowrap">${a.client ? clientChip(a.client) : ''}</td>
         <td><span class="chip">${esc(a.category)}</span></td>
-        <td class="td-act" title="${esc(a.action)}">${esc(a.action)}</td>
+        <td class="td-act" title="${esc(a.action)}"><div class="td-act-inner">${esc(a.action)}</div></td>
         <td style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtDate(a.date)}</td>
         <td onclick="event.stopPropagation()">
           <button class="resolve-btn" onclick="toggleResolved(${a.id},event)" title="Move to Resolved">
@@ -1331,7 +1331,8 @@ function togglePqMin() {
 }
 
 // % widths — must sum to 100; checkbox (0) and action (last) are non-resizable
-const colWidths = [3, 8, 25, 13, 11, 22, 10, 8];
+// cb, sev, subject, system, client, category, rec-action, date
+const colWidths = [3, 7, 24, 11, 9, 11, 23, 12];
 
 function initColResize() {
   const table = document.getElementById('alertTable');
