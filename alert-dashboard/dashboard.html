@@ -750,35 +750,62 @@ function analyzeEmail(email) {
   const body = (email.body || '').toLowerCase();
   const sl = subj.toLowerCase();
 
-  const isResolved   = /^resolved in \d/.test(sl);
-  const isProblem    = /^problem:/.test(sl);
-  const isEscalation = /escalation repeat/.test(sl);
-  const isCrashPlan  = /crashplan/.test(sl);
-  const isLogwatch   = /^logwatch for/.test(sl);
-  const isDRA        = /^dra\s*-/.test(sl);
-  const isFirewall   = /firewall alarm/.test(sl);
-  const isPower      = /power event/i.test(sl);
-  const isPRTG       = /prtg network monitor/i.test(sl);
-  const isDMARC      = /dmarc|report domain:|dkim|spf.*fail|email.*auth/i.test(sl) || /dmarc/i.test(body);
-  const isDown       = /\bdown\b/.test(sl) && !isResolved;
+  const isResolved    = /^resolved(?: in \d| ?:)|\[resolved\]/i.test(sl);
+  const isProblem     = /^problem:/.test(sl);
+  const isEscalation  = /escalation repeat/.test(sl);
+  const isCrashPlan   = /crashplan/.test(sl);
+  const isLogwatch    = /^logwatch for/.test(sl);
+  const isDRA         = /^dra\s*-/.test(sl);
+  const isFirewall    = /firewall alarm/.test(sl);
+  const isPower       = /power event/i.test(sl);
+  const isPRTG        = /prtg network monitor|from prtg/i.test(sl);
+  const isDMARC       = /dmarc|report domain:|dkim|spf.*fail|email.*auth/i.test(sl) || /dmarc/i.test(body);
+  const is3CX         = /^3cx[\s:]|^3cx alert/i.test(sl);
+  const isSentinelOne = /sentinelone|sentinel one/i.test(sl);
+  const isServiceDown = /is not running|service.*not running|agent is not available/i.test(sl);
+  const isVPN         = /\bvpn\b.*unavailable|\bvpn\b.*down|vpn to \w+ unavailable|unavailable by icmp|icmp ping/i.test(sl);
+  const isSwap        = /swap space|high swap/i.test(sl);
+  const isDiskIO      = /disk.*read.*response|disk.*write.*response|disk.*overload|disk.*util|space is low|fs.*space is low|\[warning\].*storage|storage.*snapshot/i.test(sl);
+  const isBlacklist   = /blacklist|mxtoolbox/i.test(sl);
+  const isIdracEvent  = /idrac|\bidrac\b|virtual console.*logged off|session.*logged off|user id \d|user.*name.*changed|user.*password.*changed/i.test(sl);
+  const isTicket      = /^ticket \d+.*received:/i.test(sl);
+  const isNoise       = /subscription.*renewal|auto renewal|discount.*renewal|veeamon|\[on-demand\].*veeam|webinar|let'?s keep you connected|scheduled reports are ready|new alerts$|is now online|leaving daylight|test email from prtg/i.test(sl)
+                     || /^re:\s*\d{7}|^fw:|request for information to help improve support/i.test(sl);
+  const isDown        = /\bdown\b/.test(sl) && !isResolved;
 
   let sev, urgent;
   if (isEscalation)                                          { sev='critical'; urgent=true; }
   else if (isFirewall)                                       { sev='critical'; urgent=true; }
   else if (/disk space is critical/i.test(subj))             { sev='critical'; urgent=true; }
+  else if (isNoise)                                          { sev='info';     urgent=false; }
   else if (isResolved)                                       { sev='info';     urgent=false; }
   else if (isProblem) {
     if (/cpu usage high|high memory utilization|memory utilization|pages.sec.*too high|cpu queue.*too high|high cpu utilization/i.test(subj))
                                                              { sev='high';   urgent=true; }
-    else if (/interface.*link down|link down|eth\d/i.test(subj))
+    else if (/interface.*link down|link down|eth\d|network link is down/i.test(subj))
                                                              { sev='high';   urgent=true; }
     else if (/proxy.*last seen|zabbix proxy.*last seen/i.test(subj))
                                                              { sev='high';   urgent=true; }
-    else if (/disk space/i.test(subj))                       { sev='high';   urgent=true; }
+    else if (/disk space|space is low|disk.*overload|disk.*util/i.test(subj))
+                                                             { sev='high';   urgent=true; }
+    else if (/disk.*read.*response|disk.*write.*response/i.test(subj))
+                                                             { sev='medium'; urgent=false; }
+    else if (/is not running|agent is not available/i.test(subj))
+                                                             { sev='high';   urgent=true; }
+    else if (/icmp ping|vpn.*unavailable|unavailable by icmp/i.test(subj))
+                                                             { sev='high';   urgent=true; }
+    else if (/swap space|high swap/i.test(subj))             { sev='medium'; urgent=false; }
+    else if (/missing data/i.test(subj))                     { sev='medium'; urgent=false; }
     else if (/has been restarted|uptime\s*</i.test(subj))    { sev='medium'; urgent=false; }
     else                                                     { sev='medium'; urgent=false; }
   }
   else if (isPower)                                          { sev='high';   urgent=true; }
+  else if (isSentinelOne)                                    { sev='high';   urgent=true; }
+  else if (isBlacklist)                                      { sev='high';   urgent=true; }
+  else if (isVPN)                                            { sev='high';   urgent=true; }
+  else if (isServiceDown)                                    { sev='high';   urgent=true; }
+  else if (isDiskIO)                                         { sev='medium'; urgent=false; }
+  else if (isSwap)                                           { sev='medium'; urgent=false; }
   else if (isPRTG)                                           { sev='medium'; urgent=false; }
   else if (isCrashPlan) {
     const bad = /fail|error/i.test(body + subj);
@@ -789,24 +816,31 @@ function analyzeEmail(email) {
     const fail = /fail|reject|quarantine|spf.*fail|dkim.*fail/i.test(sl + body);
     sev = fail ? 'high' : 'medium'; urgent = fail;
   }
-  else if (isDRA) {
-    sev = /fail|error|critical/i.test(subj) ? 'high' : 'low';
+  else if (is3CX) {
+    sev = /alert|down|fail|unavailable/i.test(sl) ? 'high' : 'low';
+    urgent = sev === 'high';
+  }
+  else if (isDRA || isIdracEvent) {
+    sev = /fail|error|critical|link is down/i.test(subj) ? 'high' : 'low';
     urgent = sev === 'high';
   }
   else if (isDown)                                           { sev='high';   urgent=true; }
   else                                                       { sev='medium'; urgent=false; }
 
   let cat;
-  if (/interface|eth\d|link down|ping.*down|dns.*down|rdp.*down|prtg network|summarized notification/i.test(subj)) cat='Network';
-  else if (/cpu|memory|pages.sec|cpu queue|cpu utilization|memory utilization/i.test(subj)) cat='Performance';
-  else if (/disk space/i.test(subj)) cat='Storage';
-  else if (/crashplan|backup/i.test(subj)) cat='Backup/Recovery';
-  else if (/firewall/i.test(subj)) cat='Security';
-  else if (isDMARC) cat='Email Security';
-  else if (/power event|ups/i.test(subj)) cat='Power';
-  else if (/proxy.*zabbix|zabbix proxy|has been restarted|uptime/i.test(subj)) cat='Infrastructure';
-  else if (/logwatch|patrol read|raid|dra\s*-/i.test(subj)) cat='System';
-  else cat='Other';
+  if (isNoise)                                                                                           cat='Info';
+  else if (/interface|eth\d|link down|network link is down|ping.*down|dns.*down|rdp.*down|prtg network|summarized notification/i.test(subj) || isVPN) cat='Network';
+  else if (/cpu|memory|pages\.sec|cpu queue|cpu utilization|memory utilization/i.test(subj) || isSwap)  cat='Performance';
+  else if (/disk space|space is low|disk.*overload|disk.*util|disk.*read.*response|disk.*write.*response|\[warning\].*storage|storage.*snapshot/i.test(subj) || isDiskIO) cat='Storage';
+  else if (/crashplan|backup/i.test(subj))                                                              cat='Backup/Recovery';
+  else if (isSentinelOne || isBlacklist || isTicket || /firewall|smtp relay|spoofing|password hash sync/i.test(subj)) cat='Security';
+  else if (isDMARC)                                                                                      cat='Email Security';
+  else if (is3CX)                                                                                        cat='Telephony';
+  else if (/power event|ups/i.test(subj))                                                               cat='Power';
+  else if (/proxy.*zabbix|zabbix proxy|has been restarted|uptime/i.test(subj) || isServiceDown || /missing data|new alerts$|is now online/i.test(subj)) cat='Infrastructure';
+  else if (/logwatch|patrol read|raid|dra\s*-/i.test(subj) || isIdracEvent || /cron\s+</i.test(subj) || /nas.*health|drive health|supportassist/i.test(subj)) cat='System';
+  else if (isEscalation)                                                                                 cat='Infrastructure';
+  else                                                                                                   cat='Other';
 
   const sys = extractSystem(subj);
 
@@ -826,47 +860,68 @@ function analyzeEmail(email) {
   }
 
   let action = 'Monitor and review';
-  if (isEscalation) {
+  if (isNoise)                   { action='No action required — informational or marketing email'; }
+  else if (isEscalation) {
     if (/rdp/i.test(subj))       action='Check Remote Desktop service on domain controller — repeated escalation';
     else if (/dns/i.test(subj))  action='Investigate DNS service failure — repeated escalation';
-    else if (/ping/i.test(subj)) action='Verify host availability — repeated escalation';
+    else if (/ping|icmp|vpn/i.test(subj)) action='Verify connectivity — repeated escalation without resolution';
+    else if (/https|http/i.test(subj)) action='Check web service availability — repeated escalation';
     else                         action='Investigate immediately — repeated escalation without resolution';
   } else if (isFirewall)         { action='Review firewall logs immediately for security incident'; }
+  else if (isSentinelOne)        { action='Review SentinelOne incident details and triage endpoint threat'; }
+  else if (isBlacklist)          { action='Check MxToolbox — identify blacklisted IP/domain and submit delisting request'; }
+  else if (isTicket)             { action='Review helpdesk ticket and action the requested change'; }
   else if (/disk space is critical/i.test(subj)) { action='Free disk space immediately on '+sys; }
-  else if (/link down|interface.*down/i.test(subj)) { action='Check network interface and physical connection'; }
+  else if (/network link is down|link down|interface.*down/i.test(subj)) { action='Check network interface and physical connection on '+sys; }
   else if (/cpu usage high|high cpu utilization/i.test(subj)) { action='Investigate high-CPU process on '+sys; }
-  else if (/memory.*utilization|pages.sec.*too high|high memory/i.test(subj)) { action='Check for memory leak or increase RAM on '+sys; }
+  else if (/memory.*utilization|pages\.sec.*too high|high memory/i.test(subj)) { action='Check for memory leak or increase RAM on '+sys; }
   else if (/cpu queue.*too high/i.test(subj)) { action='Investigate CPU queue length on '+sys; }
   else if (/dns.*down/i.test(subj))  { action='Check DNS service health on domain controllers'; }
   else if (/rdp.*down/i.test(subj))  { action='Restart Remote Desktop service on '+sys; }
-  else if (/ping.*down/i.test(subj)) { action='Verify host '+sys+' is online'; }
+  else if (/vpn.*unavailable|unavailable by icmp|icmp ping/i.test(subj)) { action='Check VPN tunnel and WAN connectivity for '+sys; }
   else if (/proxy.*last seen/i.test(subj)) { action='Check Zabbix proxy service status and connectivity'; }
-  else if (/disk space/i.test(subj)) { action='Clean up disk space or expand storage on '+sys; }
+  else if (/disk space is critical/i.test(subj)) { action='Free disk space immediately on '+sys; }
+  else if (/space is low|disk space/i.test(subj)) { action='Clean up disk space or expand storage on '+sys; }
+  else if (/disk.*overload|disk.*util/i.test(subj)) { action='Investigate disk I/O bottleneck on '+sys; }
+  else if (/disk.*read.*response|disk.*write.*response/i.test(subj)) { action='Check disk health and I/O load on '+sys; }
+  else if (/swap space|high swap/i.test(subj)) { action='Investigate memory pressure causing swap usage on '+sys; }
+  else if (isServiceDown)        { action='Check and restart the failed service on '+sys; }
   else if (isPower)              { action='Check UPS status and review power event details'; }
   else if (isDMARC) {
     if (/fail|reject|quarantine/i.test(sl + body)) action='Investigate DMARC failure — possible spoofing or misconfigured SPF/DKIM; review report and update DNS records';
     else action='Review DMARC aggregate report to identify sending sources and alignment issues';
   }
+  else if (is3CX)                { action='Check 3CX trunk/SBC status and SIP provider connectivity'; }
   else if (isCrashPlan)          { action='Review CrashPlan backup report for failures'; }
   else if (isResolved)           { action='No action required — resolved automatically'; }
-  else if (isDRA)                { action='Review hardware status via iDRAC for '+sys; }
+  else if (isDRA || isIdracEvent){ action='Review hardware/iDRAC event log for '+sys; }
   else if (isLogwatch)           { action='Review log summary for anomalies'; }
+  else if (/nas.*health|drive health/i.test(subj)) { action='Review NAS drive health report on '+sys; }
+  else if (/supportassist/i.test(subj)) { action='Review SupportAssist hardware alert for '+sys; }
+  else if (/missing data/i.test(subj)) { action='Investigate Zabbix agent/item data gaps on affected hosts'; }
   else if (/has been restarted/i.test(subj)) { action='Investigate unexpected restart of '+sys; }
 
   const tags = [];
-  if (/zabbix/i.test(subj+body))  tags.push('Zabbix');
-  if (/prtg/i.test(subj))         tags.push('PRTG');
-  if (isCrashPlan)                 tags.push('CrashPlan');
-  if (isResolved)                  tags.push('Resolved');
-  if (isEscalation)                tags.push('Escalation');
-  if (isProblem && !isResolved)    tags.push('Active');
-  if (/nas/i.test(subj))           tags.push('NAS');
+  if (/zabbix/i.test(subj+body))   tags.push('Zabbix');
+  if (/prtg/i.test(subj))          tags.push('PRTG');
+  if (isCrashPlan)                  tags.push('CrashPlan');
+  if (isResolved)                   tags.push('Resolved');
+  if (isEscalation)                 tags.push('Escalation');
+  if (isProblem && !isResolved)     tags.push('Active');
+  if (/nas/i.test(subj))            tags.push('NAS');
   if (/\bdc\d+\b|syddc|lfcsdc|lfcs-dc/i.test(subj)) tags.push('Domain Controller');
-  if (isPower)                     tags.push('Power');
-  if (isDRA)                       tags.push('Hardware');
-  if (isDMARC)                     tags.push('DMARC');
-  if (/spf/i.test(sl + body) && isDMARC) tags.push('SPF');
+  if (isPower)                      tags.push('Power');
+  if (isDRA || isIdracEvent)        tags.push('Hardware');
+  if (isDMARC)                      tags.push('DMARC');
+  if (/spf/i.test(sl + body) && isDMARC)  tags.push('SPF');
   if (/dkim/i.test(sl + body) && isDMARC) tags.push('DKIM');
+  if (is3CX)                        tags.push('3CX');
+  if (isSentinelOne)                tags.push('SentinelOne');
+  if (isBlacklist)                  tags.push('Blacklist');
+  if (isVPN)                        tags.push('VPN');
+  if (isServiceDown)                tags.push('Service');
+  if (isNoise)                      tags.push('Informational');
+  if (isTicket)                     tags.push('Helpdesk');
 
   return { sev, cat, sys, summary, action, urgent, tags, isResolved };
 }
