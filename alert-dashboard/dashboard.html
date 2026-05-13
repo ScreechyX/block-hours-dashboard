@@ -297,6 +297,7 @@ th{position:relative}
               <option value="info">Info</option>
             </select>
             <select class="fsel" id="fCat" onchange="filter()"></select>
+            <select class="fsel" id="fClient" onchange="filter()"></select>
             <select class="fsel" id="fSys" onchange="filter()"></select>
             <select class="fsel" id="fAutoRes" onchange="filter()">
               <option value="">All alerts</option>
@@ -323,7 +324,7 @@ th{position:relative}
               <thead><tr>
                 <th class="cb-col"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this.checked)" title="Select all on page"></th>
                 <th>Severity</th><th>Subject</th>
-                <th>System</th><th>Category</th><th>Recommended Action</th><th>Date</th><th></th>
+                <th>System</th><th>Client</th><th>Category</th><th>Recommended Action</th><th>Date</th><th></th>
               </tr></thead>
               <tbody id="tbody"></tbody>
             </table>
@@ -348,7 +349,7 @@ th{position:relative}
         <div class="twrap">
           <table>
             <thead><tr>
-              <th>Severity</th><th>Subject</th><th>System</th><th>Category</th><th>Date</th><th></th>
+              <th>Severity</th><th>Subject</th><th>System</th><th>Client</th><th>Category</th><th>Date</th><th></th>
             </tr></thead>
             <tbody id="resTbody"></tbody>
           </table>
@@ -697,7 +698,7 @@ function loadData(raw, rawResolved = []) {
       id: e.id, filename: e.filename || null,
       subject: e.subject || '(no subject)', sender: e.sender || '',
       date: e.date || null, folder: e.folder || '', bodyPreview: (e.body || '').substring(0, 400),
-      severity: r.sev, category: r.cat, affectedSystem: r.sys,
+      severity: r.sev, category: r.cat, affectedSystem: r.sys, client: extractClient(r.sys),
       summary: r.summary, action: r.action, urgent: r.urgent,
       tags: r.tags, isResolved: r.isResolved,
     };
@@ -716,7 +717,7 @@ function loadData(raw, rawResolved = []) {
     const r = analyzeEmail(e);
     return { id: e.id, filename: e.filename, subject: e.subject || '(no subject)',
       sender: e.sender || '', date: e.date || null, severity: r.sev,
-      category: r.cat, affectedSystem: r.sys };
+      category: r.cat, affectedSystem: r.sys, client: extractClient(r.sys) };
   });
 
   document.getElementById('welcome').style.display = 'none';
@@ -936,6 +937,21 @@ function extractSystem(subj) {
   return 'Unknown';
 }
 
+function extractClient(sys) {
+  if (!sys || sys === 'Unknown') return '';
+  // Dashed hostname: prefix before first dash (e.g. SE-APP01→SE, LFCS-DC01→LFCS, KIN-NAS1→KIN, RSF-CAS-MON→RSF)
+  const dashM = sys.match(/^([A-Z]{2,6})-/i);
+  if (dashM) return dashM[1].toUpperCase();
+  // Non-dashed with device-role suffix: [CLIENT][ROLE][NUM] e.g. HECNAS02→HEC, FPESVC02→FPE, SYDDC01→SYD, LFCHV03→LFC
+  const roleM = sys.match(/^([A-Z]{2,4})(NAS|DC|HV|SVC|SVR|SRV|GW|FW|APP|DB)\d*/i);
+  if (roleM) return roleM[1].toUpperCase();
+  // Well-known aliases
+  if (/^supe$/i.test(sys) || /^superioreng$/i.test(sys)) return 'SE';
+  // Fallback: first 3-4 uppercase chars
+  const fallM = sys.match(/^([A-Z]{2,4})/i);
+  return fallM ? fallM[1].toUpperCase() : '';
+}
+
 // ── Summary cards ──────────────────────────────────────────────
 function buildSummary() {
   const c={critical:0,high:0,medium:0,low:0,info:0}; let res=0, userRes=0;
@@ -1065,15 +1081,19 @@ function populateFilters() {
   const cats=[...new Set(allAlerts.map(a=>a.category))].sort();
   document.getElementById('fCat').innerHTML='<option value="">All categories</option>'+cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
 
+  const clients=[...new Set(allAlerts.map(a=>a.client).filter(Boolean))].sort();
+  document.getElementById('fClient').innerHTML='<option value="">All clients</option>'+clients.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+
   const systems=[...new Set(allAlerts.map(a=>a.affectedSystem).filter(Boolean))].sort();
   document.getElementById('fSys').innerHTML='<option value="">All systems</option>'+systems.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
 
 }
 
 function filter() {
-  const q     = document.getElementById('srch').value.toLowerCase();
-  const sev   = document.getElementById('fSev').value;
-  const cat   = document.getElementById('fCat').value;
+  const q       = document.getElementById('srch').value.toLowerCase();
+  const sev     = document.getElementById('fSev').value;
+  const cat     = document.getElementById('fCat').value;
+  const client  = document.getElementById('fClient').value;
   const sys     = document.getElementById('fSys').value;
   const autoRes = document.getElementById('fAutoRes').value;
   const range   = document.getElementById('fDate').value;
@@ -1082,6 +1102,7 @@ function filter() {
   filtered = allAlerts.filter(a => {
     if (sev && a.severity !== sev) return false;
     if (cat && a.category !== cat) return false;
+    if (client && a.client !== client) return false;
     if (sys && a.affectedSystem !== sys) return false;
     if (autoRes === 'yes' && !autoResolvedSubjects.has(normSubj(a.subject))) return false;
     if (autoRes === 'no'  &&  autoResolvedSubjects.has(normSubj(a.subject))) return false;
@@ -1090,7 +1111,7 @@ function filter() {
       if (range === 'today') { const d=new Date(a.date),n=new Date(); if(d.toDateString()!==n.toDateString()) return false; }
       else if (age > cutoffs[range]) return false;
     }
-    if (q) { const hay = (a.subject+a.sender+a.affectedSystem+a.category+a.summary+a.action).toLowerCase(); if (!hay.includes(q)) return false; }
+    if (q) { const hay = (a.subject+a.sender+a.affectedSystem+(a.client||'')+a.category+a.summary+a.action).toLowerCase(); if (!hay.includes(q)) return false; }
     return true;
   });
   page = 0; renderTable();
@@ -1112,6 +1133,7 @@ function renderTable() {
         <td style="white-space:nowrap">${a.urgent ? '<span class="ui" title="Urgent">&#9888;</span> ' : ''}<span class="sev sev-${a.severity}">${a.severity}</span></td>
         <td class="td-s">${(()=>{const tick=autoResolvedSubjects.has(normSubj(a.subject))?'<svg fill="none" stroke="#22c55e" viewBox="0 0 24 24" style="width:14px;height:14px;flex-shrink:0;margin-top:2px" title="Resolved automatically by system"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>':'<div style="width:14px;flex-shrink:0"></div>';return`<div style="display:flex;align-items:flex-start;gap:5px;overflow:hidden">${tick}<div style="overflow:hidden"><strong style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.subject)}</strong><span>${esc(a.sender)}</span></div></div>`})()}</td>
         <td class="td-sys" title="${esc(a.affectedSystem)}">${esc(a.affectedSystem)}</td>
+        <td style="white-space:nowrap">${a.client ? `<span class="chip" style="font-weight:700;letter-spacing:.4px">${esc(a.client)}</span>` : ''}</td>
         <td><span class="chip">${esc(a.category)}</span></td>
         <td class="td-act" title="${esc(a.action)}">${esc(a.action)}</td>
         <td style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtDate(a.date)}</td>
@@ -1143,6 +1165,7 @@ function renderResolvedPanel() {
       <td><span class="sev sev-${a.severity}">${a.severity}</span></td>
       <td class="td-s"><strong>${esc(a.subject)}</strong><span>${esc(a.sender)}</span></td>
       <td class="td-sys">${esc(a.affectedSystem)}</td>
+      <td style="white-space:nowrap">${a.client ? `<span class="chip" style="font-weight:700;letter-spacing:.4px">${esc(a.client)}</span>` : ''}</td>
       <td><span class="chip">${esc(a.category)}</span></td>
       <td style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtDate(a.date)}</td>
       <td><button class="resolve-btn" onclick="unresolveAlert('${esc(a.filename)}')" title="Move back to active">
@@ -1251,6 +1274,7 @@ function selectAlert(id) {
         <div class="mi"><label>From</label><span>${esc(a.sender||'Unknown')}</span></div>
         <div class="mi"><label>Date</label><span>${fmtDate(a.date)||'Unknown'}</span></div>
         <div class="mi"><label>Affected System</label><span>${esc(a.affectedSystem)}</span></div>
+        <div class="mi"><label>Client Code</label><span>${a.client ? `<span class="chip" style="font-weight:700;letter-spacing:.4px">${esc(a.client)}</span>` : '<span style="color:var(--muted)">—</span>'}</span></div>
         <div class="mi"><label>Category</label><span>${esc(a.category)}</span></div>
         <div class="mi"><label>Folder</label><span style="font-size:11px;color:var(--muted)">${esc(a.folder)}</span></div>
       </div>
