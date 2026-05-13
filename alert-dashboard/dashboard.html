@@ -439,6 +439,15 @@ const HOST_CLIENT_MAP = {
   // Riverina — "Logwatch for riverina" and "Cron <rivuser@pluto>"
   'RIVERINA':              'RIV',
   'PLUTO':                 'RIV',   // pluto = Riverina Linux server
+  // RSF multi-site client — site prefix codes map back to parent RSF code
+  // RSF-CAS (Casino), RSF-KIN (Kingaroy), RSF-OAK (Oakey), RSF-YOU (Young)
+  // Device hostnames: KIN-NAS1, MUR-NAS, OML-NAS, WAR-NAS, YOU-NAS
+  'KIN':                   'RSF',   // Kingaroy
+  'KINGAROY':              'RSF',
+  'MUR':                   'RSF',   // Murwillumbah
+  'OML':                   'RSF',   // Oakey ML?
+  'WAR':                   'RSF',   // Warwick
+  'YOU':                   'RSF',   // Young
 };
 
 function saveResolved() { localStorage.setItem(LS_KEY, JSON.stringify([...resolvedIds])); }
