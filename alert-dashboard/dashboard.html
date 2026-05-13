@@ -419,12 +419,26 @@ const KNOWN_CLIENTS = {
   'VCS':'Vikcon Construction Services','WED':'Wedgetech','XEN':'Xenith Consulting',
 };
 
-// Hostname prefix → official customer code (for cases where they differ)
+// Hostname prefix / domain → official customer code
 const HOST_CLIENT_MAP = {
-  'SE':          'SUPE',   // SE-APP01, SE-HV01, SE-DB-HV02, SE-SBC01
-  'SUPE':        'SUPE',   // SUPE system name
-  'SUPERIORENG': 'SUPE',   // superioreng hostname
-  'FUTURE':      'FPE',    // future-plus hostname
+  // Superior Engineering — SE-* hostnames, 3CX domain, company name variants
+  'SE':                    'SUPE',
+  'SUPE':                  'SUPE',
+  'SUPERIORENG':           'SUPE',
+  'SUPERIORENGINEERING':   'SUPE',
+  'SUPERIOR':              'SUPE',
+  // Future-Plus Environmental — future-plus.com.au DMARC domain
+  'FUTURE':                'FPE',
+  'FUTURE-PLUS':           'FPE',
+  // Life Fertility Clinic — lifefertility.com.au DMARC domain
+  'LIFEFERTILITY':         'LFC',
+  // Life Fertility Clinic Sydney — SYDDC01 is their Sydney domain controller
+  'SYD':                   'LFCS',
+  // Enable Advisory — enableadvisory.com DMARC domain
+  'ENABLEADVISORY':        'ENA',
+  // Riverina — "Logwatch for riverina" and "Cron <rivuser@pluto>"
+  'RIVERINA':              'RIV',
+  'PLUTO':                 'RIV',   // pluto = Riverina Linux server
 };
 
 function saveResolved() { localStorage.setItem(LS_KEY, JSON.stringify([...resolvedIds])); }
@@ -995,6 +1009,19 @@ function clientChipFull(code) {
 }
 
 function extractSystem(subj) {
+  // Logwatch: "Logwatch for riverina (Linux)" → riverina
+  const lwM = subj.match(/^logwatch for\s+([\w-]+)/i);
+  if (lwM) return lwM[1];
+  // Cron: "Cron <rivuser@pluto>" → pluto (hostname)
+  const cronM = subj.match(/^cron\s+<[\w.+-]+@([\w-]+)>/i);
+  if (cronM) return cronM[1];
+  // DMARC report domain: strip TLD to get matchable name
+  const dmarcM = subj.match(/\breport\s+domain:\s*([\w.-]+)/i);
+  if (dmarcM) return dmarcM[1].replace(/\.(com\.au|com|net|org|au)$/i, '');
+  // iDRAC / DRA style: "FPEHV01.fpe.local" prefix
+  const idracM = subj.match(/^([A-Z][A-Z0-9]+)\.[\w.]+:/i);
+  if (idracM) return idracM[1];
+  // Standard Zabbix "on HOST"
   const onM = subj.match(/\bon\s+([A-Z][A-Z0-9-]+)/i);        if (onM) return onM[1];
   const dcM = subj.match(/\b(?:SYD|LFC|OML|WAR|KIN|MUR|YOU|RSF)[A-Z]*DC\d+\b/i); if (dcM) return dcM[0];
   const draM = subj.match(/DRA\s*-\s*([\w.-]+?)(?:\s*:|\.admin)/i); if (draM) return draM[1].split('.')[0];
