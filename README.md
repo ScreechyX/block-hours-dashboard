@@ -50,3 +50,59 @@ Live at **[block.nightmareit.com](https://block.nightmareit.com)** (Cloudflare A
 |------|---------|
 | ⚠ High (red) | Ticket has accumulated more than 10 charged hours |
 | ⚠ Unbilled (yellow) | Worked hours do not match charged hours |
+
+---
+
+# Alert Dashboard
+
+A self-contained HTML dashboard for monitoring and triaging MSP alert emails. Point it at a folder of `.eml` files and it automatically analyses severity, categorises alerts, identifies the affected client, and builds a priority queue — no server, API key, or external service required.
+
+Located at `alert-dashboard/dashboard.html`.
+
+## Features
+
+- **Auto-classification** — rule-based engine categorises every alert into Network, Performance, Storage, Security, Email Security, Backup/Recovery, Infrastructure, System, Telephony, Power, or Info
+- **Severity triage** — assigns Critical / High / Medium / Low / Info based on subject content, escalation flags, and resolution status
+- **Client identification** — maps hostnames, domain names, and subject patterns to client codes from the CRM directory; unknown codes are flagged with a `?` chip
+- **Priority queue** — sidebar showing the most urgent unresolved alerts at a glance
+- **Summary cards** — total alerts, critical count, high count, and unresolved count updated in real time
+- **Charts** — doughnut charts breaking down alerts by severity and by category
+- **Live folder monitoring** — auto-refreshes every 60 seconds; filter selections are preserved across refreshes
+- **Filters** — search, severity, category, client, system, auto-resolved status, and date range
+- **Mark as resolved** — resolve individual alerts or bulk-resolve a selection; resolved alerts move to a `Resolved/` subfolder
+- **Detail panel** — click any alert to see full analysis: summary, recommended action, tags, affected system, client chip, and email body preview
+- **Persistent resolved state** — resolved alert IDs are stored in `localStorage` and restored on next load
+
+## Usage
+
+1. Open `alert-dashboard/dashboard.html` in a Chromium-based browser (Chrome, Edge — required for the File System Access API)
+2. Click **Open Folder** and select the folder containing your `.eml` alert files
+3. Grant read/write permission when prompted (required for moving resolved alerts)
+4. The dashboard scans the folder, analyses every alert, and displays the priority queue and table
+5. The folder is re-scanned automatically every 60 seconds
+
+## Alert Categories
+
+| Category | Covers |
+|----------|--------|
+| Network | Interface down, ping/DNS/RDP failures, VPN outages, PRTG notifications |
+| Performance | CPU, memory, swap usage alerts |
+| Storage | Disk space, disk I/O, NAS snapshots |
+| Security | Firewall, blacklist, SentinelOne, password hash sync, SMTP relay |
+| Email Security | DMARC aggregate reports, SPF/DKIM failures |
+| Backup/Recovery | CrashPlan, backup job alerts |
+| Infrastructure | Zabbix proxy, service restarts, uptime alerts |
+| System | Logwatch, RAID, iDRAC/DRA hardware events, drive health |
+| Telephony | 3CX alerts |
+| Power | UPS events |
+| Info | Marketing emails, renewal notices, informational notifications |
+
+## Severity Levels
+
+| Severity | Meaning |
+|----------|---------|
+| Critical | Escalation repeats or confirmed outages requiring immediate attention |
+| High | Active problems — service down, ping failure, high resource usage |
+| Medium | Warnings, resolved alerts, or events needing review |
+| Low | Informational system events (logwatch, iDRAC, drive health) |
+| Info | Noise — marketing, renewals, auto-notifications |
