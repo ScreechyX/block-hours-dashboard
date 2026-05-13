@@ -1211,6 +1211,13 @@ async function resolveGroupIds(event, ids) {
 }
 
 function populateFilters() {
+  // Preserve current selections before rebuilding dropdowns
+  const prev = {
+    cat:    document.getElementById('fCat').value,
+    client: document.getElementById('fClient').value,
+    sys:    document.getElementById('fSys').value,
+  };
+
   const cats=[...new Set(allAlerts.map(a=>a.category))].sort();
   document.getElementById('fCat').innerHTML='<option value="">All categories</option>'+cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
 
@@ -1224,6 +1231,10 @@ function populateFilters() {
   const systems=[...new Set(allAlerts.map(a=>a.affectedSystem).filter(Boolean))].sort();
   document.getElementById('fSys').innerHTML='<option value="">All systems</option>'+systems.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
 
+  // Restore previous selections if the option still exists in the new list
+  if (prev.cat)    document.getElementById('fCat').value    = prev.cat;
+  if (prev.client) document.getElementById('fClient').value = prev.client;
+  if (prev.sys)    document.getElementById('fSys').value    = prev.sys;
 }
 
 function filter() {
