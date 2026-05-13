@@ -436,18 +436,24 @@ const HOST_CLIENT_MAP = {
   'SYD':                   'LFCS',
   // Enable Advisory — enableadvisory.com DMARC domain
   'ENABLEADVISORY':        'ENA',
-  // Riverina — "Logwatch for riverina" and "Cron <rivuser@pluto>"
+  // Riverina — logwatch hostname, Cron user@host, and all multi-site device prefixes
+  // RSF = Riverina site code prefix; WG = Riverina cluster prefix
   'RIVERINA':              'RIV',
-  'PLUTO':                 'RIV',   // pluto = Riverina Linux server
-  // RSF multi-site client — site prefix codes map back to parent RSF code
-  // RSF-CAS (Casino), RSF-KIN (Kingaroy), RSF-OAK (Oakey), RSF-YOU (Young)
-  // Device hostnames: KIN-NAS1, MUR-NAS, OML-NAS, WAR-NAS, YOU-NAS
-  'KIN':                   'RSF',   // Kingaroy
-  'KINGAROY':              'RSF',
-  'MUR':                   'RSF',   // Murwillumbah
-  'OML':                   'RSF',   // Oakey ML?
-  'WAR':                   'RSF',   // Warwick
-  'YOU':                   'RSF',   // Young
+  'PLUTO':                 'RIV',   // Riverina Linux server (Cron <rivuser@pluto>)
+  'RSF':                   'RIV',   // RSF-CAS, RSF-KIN, RSF-OAK, RSF-YOU Zabbix proxies
+  'WG':                    'RIV',   // WG-Cluster-OAK-Queen St
+  'KIN':                   'RIV',   // Kingaroy (KIN-NAS1)
+  'KINGAROY':              'RIV',
+  'MUR':                   'RIV',   // Murwillumbah (MUR-NAS)
+  'OML':                   'RIV',   // Oakey (OML-NAS)
+  'WAR':                   'RIV',   // Warwick (WAR-NAS)
+  'YOU':                   'RIV',   // Young (YOU-NAS)
+  'YOUNG':                 'RIV',   // YOUNG-iDRAC2
+  'FFTN':                  'RIV',   // OakeyQueenSt Telstra connection type
+  // Harnex — DMARC domain harnex.com.au
+  'HARNEX':                'HAR',
+  // 622 Wickham Street — DMARC domain 622wickhamstreet.com
+  '622WICKHAMSTREET':      '622',
 };
 
 function saveResolved() { localStorage.setItem(LS_KEY, JSON.stringify([...resolvedIds])); }
@@ -1024,10 +1030,10 @@ function extractSystem(subj) {
   // Cron: "Cron <rivuser@pluto>" → pluto (hostname)
   const cronM = subj.match(/^cron\s+<[\w.+-]+@([\w-]+)>/i);
   if (cronM) return cronM[1];
-  // DMARC report domain: strip TLD to get matchable name
-  const dmarcM = subj.match(/\breport\s+domain:\s*([\w.-]+)/i);
+  // DMARC report domain: handles plain and {curly brace} formats
+  const dmarcM = subj.match(/\breport\s+domain:\s*\{?([\w.-]+)\}?/i);
   if (dmarcM) return dmarcM[1].replace(/\.(com\.au|com|net|org|au)$/i, '');
-  // iDRAC / DRA style: "FPEHV01.fpe.local" prefix
+  // iDRAC / DRA style: "FPEHV01.fpe.local:" prefix
   const idracM = subj.match(/^([A-Z][A-Z0-9]+)\.[\w.]+:/i);
   if (idracM) return idracM[1];
   // Standard Zabbix "on HOST"
@@ -1035,7 +1041,10 @@ function extractSystem(subj) {
   const dcM = subj.match(/\b(?:SYD|LFC|OML|WAR|KIN|MUR|YOU|RSF)[A-Z]*DC\d+\b/i); if (dcM) return dcM[0];
   const draM = subj.match(/DRA\s*-\s*([\w.-]+?)(?:\s*:|\.admin)/i); if (draM) return draM[1].split('.')[0];
   const prtgM = subj.match(/\(([A-Z][A-Z0-9-]{2,})\)/i);      if (prtgM) return prtgM[1];
-  const proxyM = subj.match(/\[([A-Z][A-Z0-9-]{3,})\]/i);     if (proxyM) return proxyM[1];
+  // Bracket pattern — skip common false-positive words
+  const _BRACKET_SKIP = /^(resolved|warning|preview|on-demand|on|prtg|info|alert|critical|error)$/i;
+  const proxyM = subj.match(/\[([A-Z][A-Z0-9-]{3,})\]/ig);
+  if (proxyM) { const tok = proxyM.map(m => m.slice(1,-1)).find(t => !_BRACKET_SKIP.test(t)); if (tok) return tok; }
   const hostM = subj.match(/\b([A-Z]{2,6}-[A-Z]{2,}[A-Z0-9-]*)\b/i); if (hostM) return hostM[1];
   return 'Unknown';
 }
