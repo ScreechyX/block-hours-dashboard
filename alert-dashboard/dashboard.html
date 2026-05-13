@@ -119,6 +119,8 @@ tr.sel td{background:rgba(59,130,246,.06)}
 .td-sys{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px}
 .td-act{font-size:12px;color:#60a5fa;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chip{background:rgba(255,255,255,.07);border-radius:5px;padding:2px 7px;font-size:11px;white-space:nowrap}
+.chip-client{background:rgba(59,130,246,.15);color:#93c5fd;border-radius:5px;padding:2px 7px;font-size:11px;font-weight:700;letter-spacing:.4px;white-space:nowrap;cursor:default}
+.chip-unknown{background:rgba(100,116,139,.15);color:var(--muted);border-radius:5px;padding:2px 7px;font-size:11px;font-weight:700;letter-spacing:.4px;white-space:nowrap;cursor:default;border:1px dashed rgba(100,116,139,.35)}
 .ui{color:var(--critical)}
 .empty{text-align:center;padding:50px;color:var(--muted)}
 tr.user-resolved td{opacity:.45}
@@ -375,6 +377,55 @@ let isScanning = false, nextRefreshAt = null;
 
 const LS_KEY = 'alert-dashboard-resolved';
 let resolvedIds = new Set(JSON.parse(localStorage.getItem(LS_KEY) || '[]'));
+
+// ── Customer code directory (from company CRM) ─────────────────
+const KNOWN_CLIENTS = {
+  '622':'622 Wickham Street','ABEL':'Abel Energy','AEP':'AEP Elical',
+  'AIMS':'All Industrial Maintenance Services','ASD':'All Site Demo',
+  'ACA':'Allston Capital','AD':'Atlantic Digital','ADEV':'Atlantic Digital Development',
+  'ADT':'Atlantic Digital Training','ALC':'Australian Lawn Concepts',
+  'AZD':'Azure Development Group','BWYS':'Bahloo Womens Youth Shelter',
+  'BFR':'Batchfire Resources','BCO':'Boggabri Coal Operations',
+  'BCC':'Bowen Coking Coal','BSTS':'Brisbane Steel Sales','BMB':'Bull Motor Bodies',
+  'BDEV':'Business Development','C3PO':'C3 Powerhouse','CBCS':'Cambridge Business & Corporate Services',
+  'CGP':'CGP Operations','CIMG':'CIMIC Group','CITI':'Citi-Steel',
+  'CRA':'Clara Resources Australia','CAS':'Corporate Administration Services',
+  'CVIS':'CV Infrastructure Services','DIM':'Defining Image Media',
+  'DEV':'Development Evolution','DPH':'Dr Philip Hall','DRA':'Dr Rod Allen',
+  'ELM':'Elementa Markets','ELT':'Elementos Limited','ELH':'Elite Helicopters',
+  'ENA':'Enable Advisory','ENLO':'EnLog','ENS':'Ensham Resources','ENT':'Enthalpy',
+  'EXH':'Executive Helicopters','FINN':'Finn Air','FAR':'Fitzroy Australia Resources',
+  'FOL':'Foley Contracting','FUS':'Fusion Modulair','FPE':'Future-Plus Environmental',
+  'GM3':'Gear M Illawarra Met Coal','GAS':'Genesis Air Services','GROW':'Grow Collective',
+  'HEC':'Hansen Environmental Consulting','HAR':'Harnex','HTX':'HealthX Group',
+  'HAA':'Hollywood and Associates','HQP':'HQPlantations','HUN':'Huntore',
+  'IBC':'iBuild Constructions','IAU':'Idemitsu Australia','IDP':'IDP Consulting',
+  'INT':'Integral Engineering','ISP':'iSeekPlant','JAE':'JA Engineering',
+  'JBP':'JBPacific','JBF':'Joe Bradley Fibreglass','KLM':'KLM Solicitors',
+  'KNO':'Knowledge Consulting','KUB':'Kubik Rube','LCG':'LCG Global',
+  'LEP':'LEP Colour Printers','LFC':'Life Fertility Clinic',
+  'LFCS':'Life Fertility Clinic Sydney','LGH':'Lighthouse Group Holdings',
+  'LIME':'Lime Medicolegal','LITH':'Lithium999','MRT':'M Resources Trading',
+  'MACH':'MACH Energy','MER':'Meramist','MCM':'Mercure Clear Mountain',
+  'MMGC':'Middlemount Golf Club','MMS':'Middlemount South','MINE':'MineWare',
+  'MLA':'ML Aviation','MLP':'More Life Planning','MCC':'Muswellbrook Coal Company',
+  'PAR':'Parallax Legal','PER':'Permark Industries','POM':'Phoenix Occupational Medicine',
+  'PST':'PStar Investments','REX':'Rex Minerals','RIV':'Riverina',
+  'SAL':'Salus International','SYA':'Sayona Mining','SIA':'Somerset International Australia',
+  'SCF':'Southern Cross Fertilisers','SJGT':'St Josephs College Gregory Terrace',
+  'STF':'Stellar Fertility','SPS':'Strategic Project Solutions','SLH':'Streamline Hydro',
+  'SGA':'Sungela','SUPE':'Superior Engineering','TEK':'Tekko Services',
+  'VACU':'Vacuum Excavation','VAL':'Valory Australia','VELD':'Veldon Group',
+  'VCS':'Vikcon Construction Services','WED':'Wedgetech','XEN':'Xenith Consulting',
+};
+
+// Hostname prefix → official customer code (for cases where they differ)
+const HOST_CLIENT_MAP = {
+  'SE':          'SUPE',   // SE-APP01, SE-HV01, SE-DB-HV02, SE-SBC01
+  'SUPE':        'SUPE',   // SUPE system name
+  'SUPERIORENG': 'SUPE',   // superioreng hostname
+  'FUTURE':      'FPE',    // future-plus hostname
+};
 
 function saveResolved() { localStorage.setItem(LS_KEY, JSON.stringify([...resolvedIds])); }
 
@@ -927,6 +978,22 @@ function analyzeEmail(email) {
   return { sev, cat, sys, summary, action, urgent, tags, isResolved };
 }
 
+function clientChip(code) {
+  const known = clientIsKnown(code);
+  const name  = clientName(code);
+  const tip   = known ? name : `Unknown client (${code})`;
+  const cls   = known ? 'chip-client' : 'chip-unknown';
+  const label = known ? esc(code) : `${esc(code)} ?`;
+  return `<span class="${cls}" title="${esc(tip)}">${label}</span>`;
+}
+
+function clientChipFull(code) {
+  const known = clientIsKnown(code);
+  const name  = clientName(code);
+  if (known) return `<span class="chip-client" title="${esc(name)}">${esc(code)}</span> <span style="font-size:12px;color:var(--muted)">${esc(name)}</span>`;
+  return `<span class="chip-unknown" title="Not found in client directory">${esc(code)} ?</span> <span style="font-size:12px;color:var(--muted)">Unknown — not in client directory</span>`;
+}
+
 function extractSystem(subj) {
   const onM = subj.match(/\bon\s+([A-Z][A-Z0-9-]+)/i);        if (onM) return onM[1];
   const dcM = subj.match(/\b(?:SYD|LFC|OML|WAR|KIN|MUR|YOU|RSF)[A-Z]*DC\d+\b/i); if (dcM) return dcM[0];
@@ -939,18 +1006,24 @@ function extractSystem(subj) {
 
 function extractClient(sys) {
   if (!sys || sys === 'Unknown') return '';
-  // Dashed hostname: prefix before first dash (e.g. SE-APP01→SE, LFCS-DC01→LFCS, KIN-NAS1→KIN, RSF-CAS-MON→RSF)
+  // Extract raw prefix
+  let raw = '';
   const dashM = sys.match(/^([A-Z]{2,6})-/i);
-  if (dashM) return dashM[1].toUpperCase();
-  // Non-dashed with device-role suffix: [CLIENT][ROLE][NUM] e.g. HECNAS02→HEC, FPESVC02→FPE, SYDDC01→SYD, LFCHV03→LFC
-  const roleM = sys.match(/^([A-Z]{2,4})(NAS|DC|HV|SVC|SVR|SRV|GW|FW|APP|DB)\d*/i);
-  if (roleM) return roleM[1].toUpperCase();
-  // Well-known aliases
-  if (/^supe$/i.test(sys) || /^superioreng$/i.test(sys)) return 'SE';
-  // Fallback: first 3-4 uppercase chars
-  const fallM = sys.match(/^([A-Z]{2,4})/i);
-  return fallM ? fallM[1].toUpperCase() : '';
+  if (dashM) {
+    raw = dashM[1].toUpperCase();
+  } else {
+    const roleM = sys.match(/^([A-Z]{2,4})(NAS|DC|HV|SVC|SVR|SRV|GW|FW|APP|DB)\d*/i);
+    raw = roleM ? roleM[1].toUpperCase() : (sys.match(/^([A-Z]{2,6})/i) || [])[1]?.toUpperCase() || '';
+  }
+  if (!raw) return '';
+  // Apply hostname→code overrides
+  const mapped = HOST_CLIENT_MAP[raw] || HOST_CLIENT_MAP[sys.toUpperCase()] || raw;
+  // Return code — known if in KNOWN_CLIENTS, else prefix (marked unknown in rendering)
+  return mapped;
 }
+
+function clientIsKnown(code) { return !!KNOWN_CLIENTS[code]; }
+function clientName(code)    { return KNOWN_CLIENTS[code] || null; }
 
 // ── Summary cards ──────────────────────────────────────────────
 function buildSummary() {
@@ -1082,7 +1155,11 @@ function populateFilters() {
   document.getElementById('fCat').innerHTML='<option value="">All categories</option>'+cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
 
   const clients=[...new Set(allAlerts.map(a=>a.client).filter(Boolean))].sort();
-  document.getElementById('fClient').innerHTML='<option value="">All clients</option>'+clients.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  document.getElementById('fClient').innerHTML='<option value="">All clients</option>'+clients.map(c=>{
+    const name = clientName(c);
+    const label = name ? `${c} — ${name}` : `${c} (Unknown)`;
+    return `<option value="${esc(c)}">${esc(label)}</option>`;
+  }).join('');
 
   const systems=[...new Set(allAlerts.map(a=>a.affectedSystem).filter(Boolean))].sort();
   document.getElementById('fSys').innerHTML='<option value="">All systems</option>'+systems.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
@@ -1133,7 +1210,7 @@ function renderTable() {
         <td style="white-space:nowrap">${a.urgent ? '<span class="ui" title="Urgent">&#9888;</span> ' : ''}<span class="sev sev-${a.severity}">${a.severity}</span></td>
         <td class="td-s">${(()=>{const tick=autoResolvedSubjects.has(normSubj(a.subject))?'<svg fill="none" stroke="#22c55e" viewBox="0 0 24 24" style="width:14px;height:14px;flex-shrink:0;margin-top:2px" title="Resolved automatically by system"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>':'<div style="width:14px;flex-shrink:0"></div>';return`<div style="display:flex;align-items:flex-start;gap:5px;overflow:hidden">${tick}<div style="overflow:hidden"><strong style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.subject)}</strong><span>${esc(a.sender)}</span></div></div>`})()}</td>
         <td class="td-sys" title="${esc(a.affectedSystem)}">${esc(a.affectedSystem)}</td>
-        <td style="white-space:nowrap">${a.client ? `<span class="chip" style="font-weight:700;letter-spacing:.4px">${esc(a.client)}</span>` : ''}</td>
+        <td style="white-space:nowrap">${a.client ? clientChip(a.client) : ''}</td>
         <td><span class="chip">${esc(a.category)}</span></td>
         <td class="td-act" title="${esc(a.action)}">${esc(a.action)}</td>
         <td style="font-size:11px;color:var(--muted);white-space:nowrap">${fmtDate(a.date)}</td>
@@ -1274,7 +1351,7 @@ function selectAlert(id) {
         <div class="mi"><label>From</label><span>${esc(a.sender||'Unknown')}</span></div>
         <div class="mi"><label>Date</label><span>${fmtDate(a.date)||'Unknown'}</span></div>
         <div class="mi"><label>Affected System</label><span>${esc(a.affectedSystem)}</span></div>
-        <div class="mi"><label>Client Code</label><span>${a.client ? `<span class="chip" style="font-weight:700;letter-spacing:.4px">${esc(a.client)}</span>` : '<span style="color:var(--muted)">—</span>'}</span></div>
+        <div class="mi"><label>Client Code</label><span>${a.client ? clientChipFull(a.client) : '<span style="color:var(--muted)">—</span>'}</span></div>
         <div class="mi"><label>Category</label><span>${esc(a.category)}</span></div>
         <div class="mi"><label>Folder</label><span style="font-size:11px;color:var(--muted)">${esc(a.folder)}</span></div>
       </div>
