@@ -759,6 +759,7 @@ function analyzeEmail(email) {
   const isFirewall   = /firewall alarm/.test(sl);
   const isPower      = /power event/i.test(sl);
   const isPRTG       = /prtg network monitor/i.test(sl);
+  const isDMARC      = /dmarc|report domain:|dkim|spf.*fail|email.*auth/i.test(sl) || /dmarc/i.test(body);
   const isDown       = /\bdown\b/.test(sl) && !isResolved;
 
   let sev, urgent;
@@ -784,6 +785,10 @@ function analyzeEmail(email) {
     sev = bad ? 'medium' : 'low'; urgent = bad;
   }
   else if (isLogwatch)                                       { sev='info';   urgent=false; }
+  else if (isDMARC) {
+    const fail = /fail|reject|quarantine|spf.*fail|dkim.*fail/i.test(sl + body);
+    sev = fail ? 'high' : 'medium'; urgent = fail;
+  }
   else if (isDRA) {
     sev = /fail|error|critical/i.test(subj) ? 'high' : 'low';
     urgent = sev === 'high';
@@ -797,6 +802,7 @@ function analyzeEmail(email) {
   else if (/disk space/i.test(subj)) cat='Storage';
   else if (/crashplan|backup/i.test(subj)) cat='Backup/Recovery';
   else if (/firewall/i.test(subj)) cat='Security';
+  else if (isDMARC) cat='Email Security';
   else if (/power event|ups/i.test(subj)) cat='Power';
   else if (/proxy.*zabbix|zabbix proxy|has been restarted|uptime/i.test(subj)) cat='Infrastructure';
   else if (/logwatch|patrol read|raid|dra\s*-/i.test(subj)) cat='System';
@@ -837,6 +843,10 @@ function analyzeEmail(email) {
   else if (/proxy.*last seen/i.test(subj)) { action='Check Zabbix proxy service status and connectivity'; }
   else if (/disk space/i.test(subj)) { action='Clean up disk space or expand storage on '+sys; }
   else if (isPower)              { action='Check UPS status and review power event details'; }
+  else if (isDMARC) {
+    if (/fail|reject|quarantine/i.test(sl + body)) action='Investigate DMARC failure — possible spoofing or misconfigured SPF/DKIM; review report and update DNS records';
+    else action='Review DMARC aggregate report to identify sending sources and alignment issues';
+  }
   else if (isCrashPlan)          { action='Review CrashPlan backup report for failures'; }
   else if (isResolved)           { action='No action required — resolved automatically'; }
   else if (isDRA)                { action='Review hardware status via iDRAC for '+sys; }
@@ -854,6 +864,9 @@ function analyzeEmail(email) {
   if (/\bdc\d+\b|syddc|lfcsdc|lfcs-dc/i.test(subj)) tags.push('Domain Controller');
   if (isPower)                     tags.push('Power');
   if (isDRA)                       tags.push('Hardware');
+  if (isDMARC)                     tags.push('DMARC');
+  if (/spf/i.test(sl + body) && isDMARC) tags.push('SPF');
+  if (/dkim/i.test(sl + body) && isDMARC) tags.push('DKIM');
 
   return { sev, cat, sys, summary, action, urgent, tags, isResolved };
 }
