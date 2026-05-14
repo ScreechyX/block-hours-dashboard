@@ -638,6 +638,24 @@ function decodeTransferEncoding(body, cte) {
   return body;
 }
 
+function htmlToText(html) {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?(p|div|tr|li|h[1-6])[^>]*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function parseEml(text) {
   const norm = text.replace(/\r\n/g, '\n');
   const split = norm.indexOf('\n\n');
@@ -682,7 +700,7 @@ function parseEml(text) {
     bodyText = decodeTransferEncoding(bodyText, cte);
   }
 
-  return { subject, from, date, body: bodyText.trim() };
+  return { subject, from, date, body: bodyText.trim(), contentType: ct };
 }
 
 // ── Scan folder for .eml files ─────────────────────────────────
@@ -711,6 +729,7 @@ async function scanFolder() {
           sender:   info.from,
           date:     info.date ? new Date(info.date).toISOString() : null,
           body:     info.body,
+          contentType: info.contentType || '',
           folder:   watchHandle.name,
         });
       } catch (err) {
@@ -790,7 +809,7 @@ function loadData(raw, rawResolved = []) {
     return {
       id: e.id, filename: e.filename || null,
       subject: e.subject || '(no subject)', sender: e.sender || '',
-      date: e.date || null, folder: e.folder || '', bodyPreview: (e.body || '').substring(0, 400),
+      date: e.date || null, folder: e.folder || '', bodyPreview: (()=>{ const b = e.body || ''; const isHtml = /text\/html/i.test(e.contentType||'') || /^<!DOCTYPE|^<html/i.test(b.trimStart()); return (isHtml ? htmlToText(b) : b).substring(0, 500); })(),
       severity: r.sev, category: r.cat, affectedSystem: r.sys, client: extractClient(r.sys),
       summary: r.summary, action: r.action, urgent: r.urgent,
       tags: r.tags, isResolved: r.isResolved,
