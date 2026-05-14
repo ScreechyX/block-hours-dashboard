@@ -675,6 +675,7 @@ function parseEml(text) {
 
   const subject = decodeEncodedWords(headers['subject'] || '');
   const from    = decodeEncodedWords(headers['from']    || '');
+  const to      = decodeEncodedWords(headers['to']      || '');
   const date    = headers['date'] || null;
   const ct      = headers['content-type'] || '';
   const cte     = headers['content-transfer-encoding'] || '';
@@ -700,7 +701,7 @@ function parseEml(text) {
     bodyText = decodeTransferEncoding(bodyText, cte);
   }
 
-  return { subject, from, date, body: bodyText.trim(), contentType: ct };
+  return { subject, from, to, date, body: bodyText.trim(), contentType: ct };
 }
 
 // ── Scan folder for .eml files ─────────────────────────────────
@@ -727,6 +728,7 @@ async function scanFolder() {
           filename: name,
           subject:  info.subject || name.replace(/\.eml$/i, ''),
           sender:   info.from,
+          to:       info.to,
           date:     info.date ? new Date(info.date).toISOString() : null,
           body:     info.body,
           contentType: info.contentType || '',
@@ -808,7 +810,7 @@ function loadData(raw, rawResolved = []) {
     const r = analyzeEmail(e);
     return {
       id: e.id, filename: e.filename || null,
-      subject: e.subject || '(no subject)', sender: e.sender || '',
+      subject: e.subject || '(no subject)', sender: e.sender || '', to: e.to || '',
       date: e.date || null, folder: e.folder || '', bodyPreview: (()=>{ const b = e.body || ''; const isHtml = /text\/html/i.test(e.contentType||'') || /^<!DOCTYPE|^<html/i.test(b.trimStart()); return (isHtml ? htmlToText(b) : b).substring(0, 500); })(),
       severity: r.sev, category: r.cat, affectedSystem: r.sys, client: extractClient(r.sys),
       summary: r.summary, action: r.action, urgent: r.urgent,
@@ -1443,6 +1445,7 @@ function selectAlert(id) {
       ${a.isResolved?'<div class="res-banner"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px;flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Resolved Automatically</div>':''}
       <div class="dm-meta">
         <div class="mi"><label>From</label><span>${esc(a.sender||'Unknown')}</span></div>
+        ${a.to?`<div class="mi"><label>To</label><span>${esc(a.to)}</span></div>`:''}
         <div class="mi"><label>Date</label><span>${fmtDate(a.date)||'Unknown'}</span></div>
         <div class="mi"><label>Affected System</label><span>${esc(a.affectedSystem)}</span></div>
         <div class="mi"><label>Client Code</label><span>${a.client ? clientChipFull(a.client) : '<span style="color:var(--muted)">—</span>'}</span></div>
