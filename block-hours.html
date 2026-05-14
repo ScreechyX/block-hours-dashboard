@@ -822,7 +822,11 @@ function snapToCurrentMonth() {
 
 // ── Rebuild filter dropdowns ───────────────────────────────────────────────────
 function rebuildFilters() {
-  const clients = [...new Set(allRows.map(r => r.client))].filter(Boolean).sort();
+  const bsCodes = new Set(blockSummaryData.map(b => b.code));
+  const allClients = [...new Set(allRows.map(r => r.client))].filter(Boolean).sort();
+  const clients = bsCodes.size > 0
+    ? allClients.filter(c => bsCodes.has(getClientCode(c)))
+    : allClients;
   const cfEl = document.getElementById('clientFilter');
   const curC = cfEl.value;
   cfEl.innerHTML = '<option value="ALL">All Clients</option>' +
