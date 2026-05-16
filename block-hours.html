@@ -1180,7 +1180,7 @@ function renderAllClientsView(rows) {
       ? `<span class="${sdaasPlus ? 'sdaas-badge plus' : 'sdaas-badge'}" style="font-size:10px;padding:1px 6px">${sdaasPlus ? 'SDaaS Secure +' : 'SDaaS'}</span>`
       : '';
     const pendingBadge = c.pending > 0
-      ? `<span style="display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700">Pending Invoice</span>`
+      ? `<span style="display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700">Pending</span>`
       : '';
     const balanceStr = c.balance !== null ? `${fmt(c.total)} hrs balance` : 'No balance data';
     return `
