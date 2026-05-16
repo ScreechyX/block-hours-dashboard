@@ -15,6 +15,7 @@ def ensure(pkg, import_as=None):
 
 ensure('playwright')
 ensure('beautifulsoup4', 'bs4')
+ensure('openpyxl')
 
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
@@ -177,6 +178,50 @@ def jobs_url_for_current_month():
     ]
     return f'{BASE}/adonis/job/index?' + urlencode(params)
 
+def parse_jobs_table(html):
+    import openpyxl
+    soup = BeautifulSoup(html, 'html.parser')
+
+    # Find header row — first tr that contains only th elements (no inputs)
+    headers = []
+    header_row_idx = 0
+    all_rows = soup.find_all('tr')
+    for i, row in enumerate(all_rows):
+        cells = row.find_all('th')
+        if cells and not row.find('input'):
+            headers = [c.get_text(strip=True) for c in cells]
+            header_row_idx = i
+            break
+
+    if not headers:
+        return None, 'Could not find header row in jobs table'
+
+    # Data rows: tr elements after the header that contain td (not th/input rows)
+    rows = []
+    for row in all_rows[header_row_idx + 1:]:
+        cells = row.find_all('td')
+        if not cells or row.find('input'):
+            continue
+        texts = [c.get_text(strip=True) for c in cells]
+        if len(texts) == len(headers):
+            rows.append(texts)
+
+    if not rows:
+        return None, 'No data rows found in jobs table'
+
+    # Build XLSX
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(headers)
+    for row in rows:
+        ws.append(row)
+
+    today = date.today()
+    tmp_path = os.path.join(tempfile.gettempdir(), f'jobs_{today.strftime("%Y-%m")}.xlsx')
+    wb.save(tmp_path)
+    return tmp_path, None
+
+
 def scrape_jobs():
     jobs_url = jobs_url_for_current_month()
     try:
@@ -200,17 +245,14 @@ def scrape_jobs():
 
                 page.wait_for_selector('table tr td', timeout=90000)
 
-                # Wait for the xlsx link to be in the DOM, then fire click directly
-                # (bypasses dropdown visibility — no need to open it first)
-                page.wait_for_selector('[id$="-xlsx"]', state='attached', timeout=30000)
+                # Click "All" to expand pagination and show every row
+                try:
+                    page.click('a:has-text("All")', timeout=10000)
+                    page.wait_for_selector('table tr td', timeout=30000)
+                except Exception:
+                    pass  # no "All" link — proceed with current page
 
-                with page.expect_download(timeout=120000) as dl:
-                    page.evaluate("document.querySelector('[id$=\"-xlsx\"]').click()")
-                download = dl.value
-
-                tmp_path = os.path.join(tempfile.gettempdir(), download.suggested_filename)
-                download.save_as(tmp_path)
-                filename = download.suggested_filename
+                html = page.content()
 
             finally:
                 ctx.close()
@@ -221,6 +263,12 @@ def scrape_jobs():
             return {'error': 'AdonisProfile is already in use. Close any other Adonis refresh windows and try again.'}
         return {'error': f'Browser error: {msg}'}
 
+    tmp_path, err = parse_jobs_table(html)
+    if err:
+        return {'error': err}
+
+    today = date.today()
+    filename = f'jobs_{today.strftime("%Y-%m")}.xlsx'
     with open(tmp_path, 'rb') as f:
         encoded = base64.b64encode(f.read()).decode('utf-8')
     os.unlink(tmp_path)
