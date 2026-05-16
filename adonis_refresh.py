@@ -17,9 +17,10 @@ from bs4 import BeautifulSoup
 BASE       = 'https://adonis.atlanticdigital.com.au'
 CLIENT_URL = f'{BASE}/adonis/client/index'
 
+# Separate profile so we don't conflict with the running Edge instance
 EDGE_PROFILE = os.path.join(
     os.environ.get('LOCALAPPDATA', ''),
-    'Microsoft', 'Edge', 'User Data'
+    'Microsoft', 'Edge', 'AdonisProfile'
 )
 
 def parse(html):
@@ -95,12 +96,13 @@ def main():
                 page = ctx.new_page()
                 page.goto(CLIENT_URL, timeout=90000, wait_until='domcontentloaded')
 
-                if 'microsoftonline.com' in page.url:
-                    print(json.dumps({'error': 'Session expired — please log in to Adonis in Edge and try again.'}))
-                    return
-                if 'my-stats' in page.url or 'login' in page.url:
-                    print(json.dumps({'error': f'Session expired — redirected to {page.url}'}))
-                    return
+                # If redirected to SSO or my-stats, wait for the user to log in (up to 3 min)
+                if 'microsoftonline.com' in page.url or 'my-stats' in page.url or 'login' in page.url:
+                    try:
+                        page.wait_for_url(f'{BASE}/adonis/client/**', timeout=180000)
+                    except Exception:
+                        print(json.dumps({'error': 'Login timed out — please log in to the Edge window that opened and try again.'}))
+                        return
 
                 # Wait for the client table to fully render
                 page.wait_for_selector('table tr td', timeout=90000)
