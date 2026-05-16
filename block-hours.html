@@ -707,7 +707,7 @@ async function refreshFromAdonis() {
     // Update clientData (permanent list)
     const prevCodes = new Set(clientData.map(c => c.code));
     const newCodes  = new Set(incoming.map(c => c.code));
-    clientData = incoming.map(c => ({ code: c.code, name: c.name }));
+    clientData = incoming.map(c => ({ code: c.code, name: c.name, sdaas: c.sdaas || null }));
 
     // Merge into blockSummaryData — update existing, add new, remove departed
     incoming.forEach(c => {
@@ -1175,8 +1175,8 @@ function renderAllClientsView(rows) {
     const clampPct  = Math.min(100, Math.max(0, c.pct));
     const color     = c.pct >= 90 ? '#dc2626' : c.pct >= 75 ? '#f59e0b' : '#22c55e';
     const textColor = c.pct >= 90 ? '#dc2626' : c.pct >= 75 ? '#d97706' : '#16a34a';
-    const sdaasBadge = c.sdaas && c.sdaas !== 'No'
-      ? `<span class="${c.sdaas === 'SdaaS+' ? 'sdaas-badge plus' : 'sdaas-badge'}" style="font-size:10px;padding:1px 6px">${esc(c.sdaas)}</span>`
+    const sdaasBadge = c.sdaas && c.sdaas !== 'No' && c.sdaas !== ''
+      ? `<span class="${(c.sdaas.includes('Secure') || c.sdaas.includes('+')) ? 'sdaas-badge plus' : 'sdaas-badge'}" style="font-size:10px;padding:1px 6px">${esc(c.sdaas)}</span>`
       : '';
     const pendingBadge = c.pending > 0
       ? `<span style="display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:20px;padding:1px 7px;font-size:10px;font-weight:700">Pending Invoice</span>`
