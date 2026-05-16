@@ -219,12 +219,30 @@ def scrape_jobs():
                         filled = True
                         break
 
-                # Open Export Formats dropdown then click Excel 2007+
-                page.click('button:has-text("Export Formats")')
-                page.wait_for_selector('#w3-xlsx', state='visible', timeout=10000)
+                # Open Export Formats dropdown — try common button text variants
+                export_btn = None
+                for sel in [
+                    'button:has-text("Export Formats")',
+                    'button:has-text("Export Data")',
+                    'button:has-text("Export")',
+                    'a:has-text("Export Formats")',
+                    'a:has-text("Export")',
+                ]:
+                    try:
+                        page.wait_for_selector(sel, timeout=5000)
+                        export_btn = sel
+                        break
+                    except Exception:
+                        continue
+                if not export_btn:
+                    raise Exception('Could not find Export button on jobs page')
+                page.click(export_btn)
+
+                # Wait for any xlsx export link (id ends with -xlsx)
+                page.wait_for_selector('[id$="-xlsx"]', state='visible', timeout=10000)
 
                 with page.expect_download(timeout=120000) as dl:
-                    page.click('#w3-xlsx')
+                    page.click('[id$="-xlsx"]')
                 download = dl.value
 
                 tmp_path = os.path.join(tempfile.gettempdir(), download.suggested_filename)
