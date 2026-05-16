@@ -200,26 +200,18 @@ def scrape_jobs():
 
                 page.wait_for_selector('table tr td', timeout=90000)
 
-                # Open Export Formats dropdown — try common button text variants
-                export_btn = None
-                for sel in [
-                    'button:has-text("Export Formats")',
-                    'button:has-text("Export Data")',
-                    'button:has-text("Export")',
-                    'a:has-text("Export Formats")',
-                    'a:has-text("Export")',
-                ]:
-                    try:
-                        page.wait_for_selector(sel, timeout=5000)
-                        export_btn = sel
-                        break
-                    except Exception:
-                        continue
-                if not export_btn:
-                    raise Exception('Could not find Export button on jobs page')
-                page.click(export_btn)
+                # Find the xlsx link (attached to DOM but inside a closed dropdown)
+                xlsx_el = page.wait_for_selector('[id$="-xlsx"]', state='attached', timeout=30000)
 
-                # Wait for any xlsx export link (id ends with -xlsx)
+                # Click the dropdown toggle that owns this link, then click the link
+                page.evaluate("""el => {
+                    const group = el.closest('.btn-group') || el.closest('.dropdown');
+                    if (group) {
+                        const toggle = group.querySelector('[data-toggle="dropdown"]')
+                                    || group.querySelector('.dropdown-toggle');
+                        if (toggle) toggle.click();
+                    }
+                }""", xlsx_el)
                 page.wait_for_selector('[id$="-xlsx"]', state='visible', timeout=10000)
 
                 with page.expect_download(timeout=120000) as dl:
