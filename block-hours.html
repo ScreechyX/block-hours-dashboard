@@ -661,14 +661,14 @@ async function refreshFromAdonis() {
     // Auto-start server if not running
     if (!await pingAdonisServer()) {
       status.textContent = 'Starting server… (click Open if prompted)';
-      window.open('adonis-refresh://', '_self');
+      const _a = document.createElement('a'); _a.href = 'adonis-refresh://'; document.body.appendChild(_a); _a.click(); document.body.removeChild(_a);
       let started = false;
       for (let i = 0; i < 20; i++) {
         await new Promise(r => setTimeout(r, 1000));
         if (await pingAdonisServer()) { started = true; break; }
       }
       if (!started) {
-        status.textContent = '✗ Could not start server. Run setup-adonis.ps1 first, then try again.';
+        status.textContent = '✗ Could not auto-start server. Run setup-adonis.ps1 first (once only), or double-click start-adonis-server.bat.';
         status.style.color = '#dc2626';
         return;
       }
