@@ -24,11 +24,13 @@ def get_session():
     for loader in (browser_cookie3.edge, browser_cookie3.chrome):
         try:
             s = requests.Session()
-            s.cookies.update(loader(domain_name='atlanticdigital.com.au'))
-            return s
+            cookies = loader(domain_name='atlanticdigital.com.au')
+            s.cookies.update(cookies)
+            names = [c.name for c in cookies]
+            return s, names
         except Exception:
             continue
-    return None
+    return None, []
 
 def is_logged_out(url):
     """Return True if the URL looks like a logged-out redirect."""
@@ -65,7 +67,7 @@ def fetch_client_page(session):
         return None, f'Adonis returned HTTP {r.status_code} on client list'
 
     if is_logged_out(r.url):
-        return None, 'Session expired — please log in to Adonis in your browser and try again.'
+        return None, f'Session expired — please log in to Adonis in your browser and try again. (redirected to: {r.url})'
 
     soup = BeautifulSoup(r.text, 'html.parser')
 
@@ -139,14 +141,14 @@ def parse(html):
     return clients, None
 
 def main():
-    session = get_session()
+    session, cookie_names = get_session()
     if not session:
         print(json.dumps({'error': 'Could not load browser session. Make sure Edge or Chrome is open and logged into Adonis.'}))
         return
 
     resp, err = fetch_client_page(session)
     if err:
-        print(json.dumps({'error': err}))
+        print(json.dumps({'error': err + f' | cookies loaded: {cookie_names}'}))
         return
 
     clients, err = parse(resp.text)
