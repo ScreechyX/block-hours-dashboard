@@ -689,16 +689,23 @@ async function refreshFromAdonis() {
     incoming.forEach(c => {
       const ex = blockSummaryData.find(b => b.code === c.code);
       if (ex) {
-        ex.name           = c.name;
-        ex.currentBalance = c.currentBalance;
-        ex.status         = c.status;
+        ex.name              = c.name;
+        ex.currentBalance    = c.currentBalance    ?? ex.currentBalance;
+        ex.pendingJobs       = c.pendingJobs       ?? ex.pendingJobs;
+        ex.pendingInvoice    = c.pendingInvoice    ?? ex.pendingInvoice;
+        ex.defaultReInvoice  = c.defaultReInvoice  ?? ex.defaultReInvoice;
+        ex.reInvoiceThreshold= c.reInvoiceThreshold?? ex.reInvoiceThreshold;
+        ex.predictedBalance  = c.predictedBalance  ?? ex.predictedBalance;
+        ex.status            = c.status;
       } else {
         blockSummaryData.push({
           code: c.code, name: c.name,
-          currentBalance: c.currentBalance,
-          pendingJobs: 0, pendingInvoice: null,
-          defaultReInvoice: 0, reInvoiceThreshold: 0,
-          predictedBalance: c.currentBalance,
+          currentBalance:     c.currentBalance    ?? 0,
+          pendingJobs:        c.pendingJobs        ?? 0,
+          pendingInvoice:     c.pendingInvoice     ?? null,
+          defaultReInvoice:   c.defaultReInvoice   ?? 0,
+          reInvoiceThreshold: c.reInvoiceThreshold ?? 0,
+          predictedBalance:   c.predictedBalance   ?? c.currentBalance ?? 0,
           status: c.status
         });
       }

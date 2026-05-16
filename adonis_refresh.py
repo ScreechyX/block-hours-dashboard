@@ -1,4 +1,4 @@
-import sys, json, os
+import sys, json, os, re
 import subprocess
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -25,7 +25,16 @@ EDGE_PROFILE = os.path.join(
     'Microsoft', 'Edge', 'AdonisProfile'
 )
 
-def parse(html):
+SUMMARY_FIELDS = {
+    'Current Block Hour Balance': 'currentBalance',
+    'Pending Block Hour Jobs':    'pendingJobs',
+    'Pending Block Hour Invoice': 'pendingInvoice',
+    'Default Re-Invoice Block Hours': 'defaultReInvoice',
+    'Re-Invoice Threshold':       'reInvoiceThreshold',
+    'Predicted Balance':          'predictedBalance',
+}
+
+def parse_client_list(html):
     soup = BeautifulSoup(html, 'html.parser')
     headers = None
     all_rows = soup.find_all('tr')
@@ -46,7 +55,7 @@ def parse(html):
         return None, 'Could not find table header row' + hint
 
     idx = {h: i for i, h in enumerate(headers)}
-    required = ['Code', 'Name', 'Client Team', 'Block Hour', 'Block Hours', 'SdaaS']
+    required = ['Code', 'Name', 'Client Team', 'Block Hour', 'SdaaS']
     missing = [r for r in required if r not in idx]
     if missing:
         return None, f'Missing columns: {missing}'
@@ -70,22 +79,43 @@ def parse(html):
         name = texts[idx['Name']].strip()
         if not code or not name:
             continue
-        try:
-            balance = float(texts[idx['Block Hours']])
-        except (ValueError, IndexError):
-            balance = 0.0
-        sdaas = texts[idx['SdaaS']].strip()
+
+        client_id = None
+        for a in row.find_all('a', href=True):
+            m = re.search(r'client_id=(\d+)', a['href'])
+            if m:
+                client_id = m.group(1)
+                break
+        if not client_id:
+            continue
+
         clients.append({
-            'code': code,
-            'name': name,
-            'currentBalance': balance,
-            'status': 'OK' if balance >= 0 else 'ACTION REQUIRED',
-            'sdaas': sdaas
+            'code':     code,
+            'name':     name,
+            'clientId': client_id,
+            'sdaas':    texts[idx['SdaaS']].strip(),
         })
     return clients, None
 
 
+def parse_block_overview(html):
+    soup = BeautifulSoup(html, 'html.parser')
+    result = {}
+    for row in soup.find_all('tr'):
+        cells = row.find_all(['th', 'td'])
+        if len(cells) >= 2:
+            label = cells[0].get_text(strip=True)
+            if label in SUMMARY_FIELDS:
+                try:
+                    val = cells[1].get_text(strip=True).replace(',', '')
+                    result[SUMMARY_FIELDS[label]] = float(val)
+                except (ValueError, IndexError):
+                    result[SUMMARY_FIELDS[label]] = 0.0
+    return result
+
+
 def scrape():
+    clients = []
     try:
         with sync_playwright() as p:
             ctx = p.chromium.launch_persistent_context(
@@ -106,7 +136,22 @@ def scrape():
                     page.goto(CLIENT_URL, timeout=90000, wait_until='domcontentloaded')
 
                 page.wait_for_selector('table tr td', timeout=90000)
-                content = page.content()
+                clients, err = parse_client_list(page.content())
+                if err:
+                    return {'error': err}
+
+                for client in clients:
+                    url = f'{BASE}/adonis/client/block-overview?client_id={client["clientId"]}'
+                    page.goto(url, timeout=60000, wait_until='domcontentloaded')
+                    try:
+                        page.wait_for_selector('table', timeout=30000)
+                    except Exception:
+                        pass
+                    overview = parse_block_overview(page.content())
+                    client.update(overview)
+                    balance = client.get('currentBalance', 0)
+                    client['status'] = 'OK' if balance >= 0 else 'ACTION REQUIRED'
+
             finally:
                 ctx.close()
 
@@ -116,9 +161,6 @@ def scrape():
             return {'error': 'AdonisProfile is already in use. Close any other Adonis refresh windows and try again.'}
         return {'error': f'Browser error: {msg}'}
 
-    clients, err = parse(content)
-    if err:
-        return {'error': err}
     return {'clients': clients, 'count': len(clients)}
 
 
@@ -153,14 +195,13 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
 
     def log_message(self, *args):
-        pass  # suppress console noise
+        pass
 
 
 if __name__ == '__main__':
     try:
         server = HTTPServer(('localhost', PORT), Handler)
     except OSError:
-        # Port already in use — another instance is already running, exit silently
         sys.exit(0)
     print(f'Adonis refresh server running on http://localhost:{PORT}/refresh')
     print('Leave this window open. You can now use the dashboard from anywhere.')
