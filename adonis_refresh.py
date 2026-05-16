@@ -191,25 +191,50 @@ def parse_jobs_table(html):
     import openpyxl
     soup = BeautifulSoup(html, 'html.parser')
 
-    # Find header row — first tr that contains only th elements (no inputs)
+    # Try thead first, then fall back to any tr with th cells, then first tr with td cells
     headers = []
     header_row_idx = 0
     all_rows = soup.find_all('tr')
-    for i, row in enumerate(all_rows):
-        cells = row.find_all('th')
-        if cells and not row.find('input'):
+
+    thead = soup.find('thead')
+    if thead:
+        header_tr = thead.find('tr')
+        if header_tr and not header_tr.find('input'):
+            cells = header_tr.find_all(['th', 'td'])
             headers = [c.get_text(strip=True) for c in cells]
-            header_row_idx = i
-            break
+            header_row_idx = all_rows.index(header_tr)
 
     if not headers:
-        return None, 'Could not find header row in jobs table'
+        for i, row in enumerate(all_rows):
+            if row.find('input'):
+                continue
+            cells = row.find_all('th')
+            if cells:
+                headers = [c.get_text(strip=True) for c in cells]
+                header_row_idx = i
+                break
 
-    # Data rows: tr elements after the header that contain td (not th/input rows)
+    if not headers:
+        for i, row in enumerate(all_rows):
+            if row.find('input'):
+                continue
+            cells = row.find_all('td')
+            if cells:
+                headers = [c.get_text(strip=True) for c in cells]
+                header_row_idx = i
+                break
+
+    if not headers:
+        sample = [r.get_text(' ', strip=True)[:80] for r in all_rows[:5]]
+        return None, f'Could not find header row. First rows: {sample}'
+
+    # Data rows after the header — td rows without inputs
     rows = []
     for row in all_rows[header_row_idx + 1:]:
+        if row.find('input'):
+            continue
         cells = row.find_all('td')
-        if not cells or row.find('input'):
+        if not cells:
             continue
         texts = [c.get_text(strip=True) for c in cells]
         if len(texts) == len(headers):
