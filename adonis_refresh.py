@@ -33,7 +33,7 @@ def get_session():
 def check_session(session):
     """Hit my-stats first; return error string if session is expired."""
     try:
-        r = session.get(START_URL, timeout=15)
+        r = session.get(START_URL, timeout=60)
     except Exception as e:
         return f'Request failed: {e}'
     if r.status_code != 200:
@@ -65,7 +65,7 @@ def fetch_client_page(session):
     """
     # First load the unfiltered page to find the filter form
     try:
-        r = session.get(CLIENT_URL, timeout=15)
+        r = session.get(CLIENT_URL, timeout=60)
     except Exception as e:
         return None, f'Request failed loading client list: {e}'
 
@@ -79,7 +79,7 @@ def fetch_client_page(session):
     if field_name and field_value:
         # Resubmit with the filter applied
         try:
-            r = session.get(CLIENT_URL, params={field_name: field_value}, timeout=15)
+            r = session.get(CLIENT_URL, params={field_name: field_value}, timeout=60)
         except Exception as e:
             return None, f'Request failed applying filter: {e}'
 
