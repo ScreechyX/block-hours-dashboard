@@ -200,22 +200,12 @@ def scrape_jobs():
 
                 page.wait_for_selector('table tr td', timeout=90000)
 
-                # Find the xlsx link (attached to DOM but inside a closed dropdown)
-                xlsx_el = page.wait_for_selector('[id$="-xlsx"]', state='attached', timeout=30000)
-
-                # Click the dropdown toggle that owns this link, then click the link
-                page.evaluate("""el => {
-                    const group = el.closest('.btn-group') || el.closest('.dropdown');
-                    if (group) {
-                        const toggle = group.querySelector('[data-toggle="dropdown"]')
-                                    || group.querySelector('.dropdown-toggle');
-                        if (toggle) toggle.click();
-                    }
-                }""", xlsx_el)
-                page.wait_for_selector('[id$="-xlsx"]', state='visible', timeout=10000)
+                # Wait for the xlsx link to be in the DOM, then fire click directly
+                # (bypasses dropdown visibility — no need to open it first)
+                page.wait_for_selector('[id$="-xlsx"]', state='attached', timeout=30000)
 
                 with page.expect_download(timeout=120000) as dl:
-                    page.click('[id$="-xlsx"]')
+                    page.evaluate("document.querySelector('[id$=\"-xlsx\"]').click()")
                 download = dl.value
 
                 tmp_path = os.path.join(tempfile.gettempdir(), download.suggested_filename)
