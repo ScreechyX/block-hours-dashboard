@@ -1,5 +1,7 @@
 import sys, json, os, re, base64, tempfile
 import subprocess
+import calendar
+from datetime import date
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 PORT = 3001
@@ -164,9 +166,20 @@ def scrape():
     return {'clients': clients, 'count': len(clients)}
 
 
-JOBS_URL = f'{BASE}/adonis/job/index?JobSearch%5Bjob_tech_charge_type%5D=block'
+def jobs_url_for_current_month():
+    today = date.today()
+    first = today.replace(day=1).strftime('%d/%m/%Y')
+    last  = today.replace(day=calendar.monthrange(today.year, today.month)[1]).strftime('%d/%m/%Y')
+    from urllib.parse import urlencode
+    params = {
+        'JobSearch[job_tech_charge_type]': 'block',
+        'JobSearch[date_from]': first,
+        'JobSearch[date_to]':   last,
+    }
+    return f'{BASE}/adonis/job/index?' + urlencode(params)
 
 def scrape_jobs():
+    jobs_url = jobs_url_for_current_month()
     try:
         with sync_playwright() as p:
             ctx = p.chromium.launch_persistent_context(
@@ -177,16 +190,34 @@ def scrape_jobs():
             )
             try:
                 page = ctx.new_page()
-                page.goto(JOBS_URL, timeout=90000, wait_until='domcontentloaded')
+                page.goto(jobs_url, timeout=90000, wait_until='domcontentloaded')
 
                 if 'microsoftonline.com' in page.url or 'my-stats' in page.url or 'login' in page.url:
                     try:
                         page.wait_for_url(f'{BASE}/**', timeout=180000)
                     except Exception:
                         return {'error': 'Login timed out — please log in to the Edge window that opened and try again.'}
-                    page.goto(JOBS_URL, timeout=90000, wait_until='domcontentloaded')
+                    page.goto(jobs_url, timeout=90000, wait_until='domcontentloaded')
 
                 page.wait_for_selector('table tr td', timeout=90000)
+
+                # If the URL date params weren't picked up, try filling the filter inputs directly
+                today = date.today()
+                first = today.replace(day=1).strftime('%d/%m/%Y')
+                last  = today.replace(day=calendar.monthrange(today.year, today.month)[1]).strftime('%d/%m/%Y')
+                filled = False
+                for from_sel, to_sel in [
+                    ('input[name="JobSearch[date_from]"]', 'input[name="JobSearch[date_to]"]'),
+                    ('input[name="JobSearch[from_date]"]', 'input[name="JobSearch[to_date]"]'),
+                    ('input[name="JobSearch[start_date]"]', 'input[name="JobSearch[end_date]"]'),
+                ]:
+                    if page.query_selector(from_sel) and page.query_selector(to_sel):
+                        page.fill(from_sel, first)
+                        page.fill(to_sel, last)
+                        page.keyboard.press('Enter')
+                        page.wait_for_selector('table tr td', timeout=30000)
+                        filled = True
+                        break
 
                 # Open Export Formats dropdown then click Excel 2007+
                 page.click('button:has-text("Export Formats")')
