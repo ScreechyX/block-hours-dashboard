@@ -1,4 +1,4 @@
-import sys, json, os, re
+import sys, json, os, re, base64, tempfile
 import subprocess
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -164,6 +164,57 @@ def scrape():
     return {'clients': clients, 'count': len(clients)}
 
 
+JOBS_URL = f'{BASE}/adonis/job/index?JobSearch%5Bjob_tech_charge_type%5D=block'
+
+def scrape_jobs():
+    try:
+        with sync_playwright() as p:
+            ctx = p.chromium.launch_persistent_context(
+                user_data_dir=EDGE_PROFILE,
+                channel='msedge',
+                headless=False,
+                args=['--no-first-run', '--no-default-browser-check']
+            )
+            try:
+                page = ctx.new_page()
+                page.goto(JOBS_URL, timeout=90000, wait_until='domcontentloaded')
+
+                if 'microsoftonline.com' in page.url or 'my-stats' in page.url or 'login' in page.url:
+                    try:
+                        page.wait_for_url(f'{BASE}/**', timeout=180000)
+                    except Exception:
+                        return {'error': 'Login timed out — please log in to the Edge window that opened and try again.'}
+                    page.goto(JOBS_URL, timeout=90000, wait_until='domcontentloaded')
+
+                page.wait_for_selector('table tr td', timeout=90000)
+
+                # Open Export Formats dropdown then click Excel 2007+
+                page.click('button:has-text("Export Formats")')
+                page.wait_for_selector('#w3-xlsx', state='visible', timeout=10000)
+
+                with page.expect_download(timeout=120000) as dl:
+                    page.click('#w3-xlsx')
+                download = dl.value
+
+                tmp_path = os.path.join(tempfile.gettempdir(), download.suggested_filename)
+                download.save_as(tmp_path)
+                filename = download.suggested_filename
+
+            finally:
+                ctx.close()
+
+    except Exception as e:
+        msg = str(e)
+        if 'user data directory is already in use' in msg.lower():
+            return {'error': 'AdonisProfile is already in use. Close any other Adonis refresh windows and try again.'}
+        return {'error': f'Browser error: {msg}'}
+
+    with open(tmp_path, 'rb') as f:
+        encoded = base64.b64encode(f.read()).decode('utf-8')
+    os.unlink(tmp_path)
+    return {'filename': filename, 'data': encoded}
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
@@ -173,6 +224,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/ping':
             body = b'{"ok":true}'
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self._cors()
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path == '/job-import':
+            result = scrape_jobs()
+            body = json.dumps(result).encode()
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self._cors()

@@ -40,13 +40,6 @@
   .form-group select, .form-group input { width: 100%; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; color: #1e293b; background: white; }
   .form-group select:focus, .form-group input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px #bfdbfe; }
 
-  /* Drop zone */
-  .drop-zone { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 20px 12px; text-align: center; cursor: pointer; transition: all 0.2s; background: #f8fafc; }
-  .drop-zone:hover, .drop-zone.over { border-color: #3b82f6; background: #eff6ff; }
-  .drop-zone svg { width: 28px; height: 28px; color: #94a3b8; margin: 0 auto 8px; display: block; }
-  .drop-zone p { font-size: 12px; color: #64748b; line-height: 1.5; }
-  .drop-zone strong { color: #3b82f6; }
-  #fileInput { display: none; }
 
   /* History list */
   .history-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
@@ -187,7 +180,7 @@
     <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12h18M3 12l6-6m-6 6l6 6"/></svg>
     Home
   </a>
-  <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleFileSelect(event)">
+
 </div>
 
 <div class="alert-bar" id="alertBar">
@@ -197,10 +190,14 @@
 
 <div class="layout">
   <div class="sidebar">
-    <!-- Drop zone -->
-    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg>
-      <p>Drop a <strong>grid export</strong> .xlsx here or click to browse</p>
+    <!-- Job Import -->
+    <div class="sidebar-section">
+      <h3>Job Data</h3>
+      <button class="btn-outline-full" id="btnJobImport" onclick="jobImport()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Job Import
+      </button>
+      <div id="jobImportStatus" style="margin-top:6px;font-size:11px;color:#64748b"></div>
     </div>
 
     <!-- Client database -->
@@ -263,7 +260,7 @@
     <div class="no-data" id="emptyState">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
       <p><strong>No data imported yet</strong></p>
-      <small>Import a grid export XLSX file from your ticketing system to get started.</small>
+      <small>Click <strong>Job Import</strong> to pull block hour jobs from Adonis.</small>
     </div>
 
     <!-- Dashboard (hidden until data loaded) -->
@@ -485,7 +482,6 @@ const store = {
 // ── Boot ───────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   loadSettings();
-  setupDragDrop();
 
   try {
     const saved = store.get('bh_lastData');
@@ -544,25 +540,52 @@ function saveSettings() {
   store.set('bh_pending', document.getElementById('pendingInput').value);
 }
 
-// ── Drag & drop ────────────────────────────────────────────────────────────────
-function setupDragDrop() {
-  const zone = document.getElementById('dropZone');
-  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
-  zone.addEventListener('dragleave', () => zone.classList.remove('over'));
-  zone.addEventListener('drop', e => {
-    e.preventDefault(); zone.classList.remove('over');
-    if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
-  });
-  document.body.addEventListener('dragover', e => e.preventDefault());
-  document.body.addEventListener('drop', e => {
-    e.preventDefault();
-    if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
-  });
-}
+async function jobImport() {
+  const btn    = document.getElementById('btnJobImport');
+  const status = document.getElementById('jobImportStatus');
+  btn.disabled = true;
+  btn.innerHTML = btn.innerHTML.replace('Job Import', 'Importing…');
+  status.textContent = '';
+  status.style.color = '#64748b';
 
-function handleFileSelect(e) {
-  if (e.target.files[0]) processFile(e.target.files[0]);
-  e.target.value = '';
+  try {
+    if (!await pingAdonisServer()) {
+      status.textContent = 'Starting server… (click Open if prompted)';
+      const _a = document.createElement('a'); _a.href = 'adonis-refresh://'; document.body.appendChild(_a); _a.click(); document.body.removeChild(_a);
+      let started = false;
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 1000));
+        if (await pingAdonisServer()) { started = true; break; }
+      }
+      if (!started) {
+        status.textContent = '✗ Could not start server. Run setup-adonis.ps1 first.';
+        status.style.color = '#dc2626';
+        return;
+      }
+    }
+
+    status.textContent = 'Exporting jobs from Adonis…';
+    const resp = await fetch('http://localhost:3001/job-import');
+    const data = await resp.json();
+
+    if (data.error) {
+      status.textContent = '✗ ' + data.error;
+      status.style.color = '#dc2626';
+      return;
+    }
+
+    const bytes = Uint8Array.from(atob(data.data), c => c.charCodeAt(0));
+    const file  = new File([bytes], data.filename, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    processFile(file);
+    status.textContent = '✓ Jobs imported successfully';
+    status.style.color = '#16a34a';
+  } catch(e) {
+    status.textContent = '✗ Could not reach Adonis server. Run setup-adonis.ps1 first.';
+    status.style.color = '#dc2626';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = btn.innerHTML.replace('Importing…', 'Job Import');
+  }
 }
 
 // ── Client database ────────────────────────────────────────────────────────────
