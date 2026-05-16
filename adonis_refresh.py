@@ -278,7 +278,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _exit(self):
         import time
-        time.sleep(0.3)
+        time.sleep(0.8)
         os._exit(0)
 
     def _cors(self):
