@@ -1030,11 +1030,12 @@ function renderAllClientsView(rows) {
     byClient[r.client].charged += r.charged ?? 0;
   });
 
-  const clients = Object.values(byClient).map(c => {
+  const knownCodes = new Set(clientData.map(c => c.code));
+  const clients = Object.values(byClient).filter(c => knownCodes.has(getClientCode(c.client))).map(c => {
     const code    = getClientCode(c.client);
     const bsMatch = blockSummaryData.find(x => x.code === code) || null;
     const clMatch = clientData.find(x => x.code === code) || null;
-    const balance = bsMatch ? bsMatch.currentBalance : (clMatch ? clMatch.blockHours : null);
+    const balance = bsMatch ? bsMatch.currentBalance : null;
     const pending = bsMatch && bsMatch.pendingInvoice !== null ? bsMatch.pendingInvoice : 0;
     const total   = (balance ?? 0) + pending;
     const pct     = total !== 0 ? (c.charged / Math.abs(total)) * 100 : 0;
