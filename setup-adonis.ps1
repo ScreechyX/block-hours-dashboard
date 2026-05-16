@@ -1,5 +1,5 @@
-$scriptPath = Join-Path $PSScriptRoot "adonis_refresh.py"
-$cmd = "cmd /c start /min `"Adonis Server`" python `"$scriptPath`""
+$batPath = Join-Path $PSScriptRoot "start-adonis-server.bat"
+$cmd = "cmd /c start `"Adonis Server`" `"$batPath`""
 
 New-Item -Path "HKCU:\Software\Classes\adonis-refresh" -Force | Out-Null
 Set-ItemProperty -Path "HKCU:\Software\Classes\adonis-refresh" -Name "(default)" -Value "Adonis Refresh Server"
