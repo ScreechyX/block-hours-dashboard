@@ -1189,7 +1189,7 @@ function renderAllClientsView(rows) {
           <div>
             <div class="ac-client-name">${esc(c.name)}</div>
             <div class="ac-code">${esc(c.code)}</div>
-            ${(sdaasBadge || pendingBadge) ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">${sdaasBadge}${pendingBadge}</div>` : ''}
+            <div style="margin-top:5px;min-height:20px;display:flex;flex-wrap:wrap;gap:4px">${sdaasBadge}${pendingBadge}</div>
           </div>
           <div class="ac-pct-label" style="color:${textColor}">${c.balance !== null ? c.pct.toFixed(0) + '%' : '—'}</div>
         </div>
