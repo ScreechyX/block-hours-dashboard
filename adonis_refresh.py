@@ -245,12 +245,15 @@ def scrape_jobs():
 
                 page.wait_for_selector('table tr td', timeout=90000)
 
-                # Click "All" to expand pagination and show every row
-                try:
-                    page.click('a:has-text("All")', timeout=10000)
-                    page.wait_for_selector('table tr td', timeout=30000)
-                except Exception:
-                    pass  # no "All" link — proceed with current page
+                # Navigate to the "All" view — find the link whose href contains _tog...=all
+                all_href = page.evaluate("""() => {
+                    const a = Array.from(document.querySelectorAll('a[href]'))
+                        .find(a => /_tog[^=]+=all/.test(a.href));
+                    return a ? a.href : null;
+                }""")
+                if all_href:
+                    page.goto(all_href, timeout=90000, wait_until='domcontentloaded')
+                    page.wait_for_selector('table tr td', timeout=60000)
 
                 html = page.content()
 
