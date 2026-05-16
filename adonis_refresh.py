@@ -211,10 +211,13 @@ def scrape_jobs():
 
                 # Trigger the Excel 2007+ export via JS click (bypasses dropdown visibility)
                 page.wait_for_selector('[id$="-xlsx"]', state='attached', timeout=30000)
-                page.on('dialog', lambda d: d.accept())
+                page.evaluate("document.querySelector('[id$=\"-xlsx\"]').click()")
+
+                # A custom HTML confirmation modal appears — click its Ok button
+                page.wait_for_selector('button:has-text("Ok")', timeout=15000)
 
                 with page.expect_download(timeout=120000) as dl:
-                    page.evaluate("document.querySelector('[id$=\"-xlsx\"]').click()")
+                    page.click('button:has-text("Ok")')
                 download = dl.value
 
                 tmp_path = os.path.join(tempfile.gettempdir(), download.suggested_filename)
