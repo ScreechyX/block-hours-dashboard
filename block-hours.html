@@ -648,7 +648,7 @@ async function refreshFromAdonis() {
   status.style.color = '#64748b';
 
   try {
-    const resp = await fetch('/api/adonis-refresh');
+    const resp = await fetch('http://localhost:3001/refresh');
     const data = await resp.json();
 
     if (data.error) {
@@ -696,7 +696,7 @@ async function refreshFromAdonis() {
     rebuildFilters();
     applyFilters();
   } catch(e) {
-    status.textContent = '✗ Could not reach local server. Try restarting it.';
+    status.textContent = '✗ Could not reach Adonis server. Run start-adonis-server.bat and try again.';
     status.style.color = '#dc2626';
   } finally {
     btn.disabled = false;

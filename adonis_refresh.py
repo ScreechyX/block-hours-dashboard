@@ -1,5 +1,8 @@
 import sys, json, os
 import subprocess
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+PORT = 3001
 
 def ensure(pkg, import_as=None):
     try:
@@ -17,7 +20,6 @@ from bs4 import BeautifulSoup
 BASE       = 'https://adonis.atlanticdigital.com.au'
 CLIENT_URL = f'{BASE}/adonis/client/index'
 
-# Separate profile so we don't conflict with the running Edge instance
 EDGE_PROFILE = os.path.join(
     os.environ.get('LOCALAPPDATA', ''),
     'Microsoft', 'Edge', 'AdonisProfile'
@@ -83,7 +85,7 @@ def parse(html):
     return clients, None
 
 
-def main():
+def scrape():
     try:
         with sync_playwright() as p:
             ctx = p.chromium.launch_persistent_context(
@@ -96,18 +98,13 @@ def main():
                 page = ctx.new_page()
                 page.goto(CLIENT_URL, timeout=90000, wait_until='domcontentloaded')
 
-                # If redirected to SSO, wait for the user to log in then navigate to client list
                 if 'microsoftonline.com' in page.url or 'my-stats' in page.url or 'login' in page.url:
                     try:
-                        # Wait until we're back on any Adonis page (login complete)
                         page.wait_for_url(f'{BASE}/**', timeout=180000)
                     except Exception:
-                        print(json.dumps({'error': 'Login timed out — please log in to the Edge window that opened and try again.'}))
-                        return
-                    # Now navigate to the client list
+                        return {'error': 'Login timed out — please log in to the Edge window that opened and try again.'}
                     page.goto(CLIENT_URL, timeout=90000, wait_until='domcontentloaded')
 
-                # Wait for the client table to fully render
                 page.wait_for_selector('table tr td', timeout=90000)
                 content = page.content()
             finally:
@@ -116,17 +113,44 @@ def main():
     except Exception as e:
         msg = str(e)
         if 'user data directory is already in use' in msg.lower():
-            print(json.dumps({'error': 'Edge is already open with this profile. Close Edge and try again, or leave Edge open and try — it may work automatically.'}))
-        else:
-            print(json.dumps({'error': f'Browser error: {msg}'}))
-        return
+            return {'error': 'AdonisProfile is already in use. Close any other Adonis refresh windows and try again.'}
+        return {'error': f'Browser error: {msg}'}
 
     clients, err = parse(content)
     if err:
-        print(json.dumps({'error': err}))
-        return
-
-    print(json.dumps({'clients': clients, 'count': len(clients)}))
+        return {'error': err}
+    return {'clients': clients, 'count': len(clients)}
 
 
-main()
+class Handler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self._cors()
+        self.end_headers()
+
+    def do_GET(self):
+        if self.path == '/refresh':
+            result = scrape()
+            body = json.dumps(result).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self._cors()
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def _cors(self):
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+
+    def log_message(self, *args):
+        pass  # suppress console noise
+
+
+if __name__ == '__main__':
+    server = HTTPServer(('localhost', PORT), Handler)
+    print(f'Adonis refresh server running on http://localhost:{PORT}/refresh')
+    print('Leave this window open. You can now use the dashboard from anywhere.')
+    server.serve_forever()
