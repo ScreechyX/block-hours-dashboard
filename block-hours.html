@@ -206,18 +206,12 @@
     <!-- Client database -->
     <div class="sidebar-section">
       <h3>Client Database</h3>
-      <button class="btn-outline-full" onclick="document.getElementById('clientFileInput').click()">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        Import Client List
-      </button>
-      <input type="file" id="clientFileInput" accept=".xlsx,.xls" onchange="handleClientFile(event)" style="display:none">
-      <div id="clientDbStatus" style="margin-top:6px;font-size:11px;color:#64748b"></div>
-      <button class="btn-outline-full" style="margin-top:8px" onclick="document.getElementById('blockSummaryInput').click()">
+      <button class="btn-outline-full" onclick="document.getElementById('blockSummaryInput').click()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         Import Block Summary
       </button>
       <input type="file" id="blockSummaryInput" accept=".xlsx,.xls" onchange="handleBlockSummaryFile(event)" style="display:none">
-      <div id="blockSummaryStatus" style="margin-top:6px;font-size:11px;color:#64748b"></div>
+      <div id="blockSummaryStatus" style="margin-top:6px;font-size:11px;color:#64748b;display:none"></div>
     </div>
 
     <!-- Filters -->
@@ -300,19 +294,19 @@
           <div class="ci-value" id="ciCode">—</div>
         </div>
         <div class="ci-item">
-          <div class="ci-label">SDaaS</div>
+          <div class="ci-label">Status</div>
           <div class="ci-value" id="ciSdaas">—</div>
         </div>
         <div class="ci-item">
-          <div class="ci-label">Client Lead</div>
+          <div class="ci-label">Pending Jobs</div>
           <div class="ci-value" id="ciLead">—</div>
         </div>
         <div class="ci-item">
-          <div class="ci-label">System Balance</div>
+          <div class="ci-label">Current Balance</div>
           <div class="ci-value" id="ciBalance">—</div>
         </div>
         <div class="ci-item">
-          <div class="ci-label">Team</div>
+          <div class="ci-label">Default Re-Invoice</div>
           <div class="ci-value" id="ciTeam">—</div>
         </div>
         <div class="ci-item" id="ciPendingItem" style="display:none">
@@ -441,10 +435,35 @@
 </div>
 
 <script>
+// ── Permanent client list (Atlantic Digital) ───────────────────────────────────
+const PERMANENT_CLIENTS = [
+  {"code":"622","name":"622 Wickham Street"},
+  {"code":"ALC","name":"Australian Lawn Concepts"},
+  {"code":"AZD","name":"Azure Development Group"},
+  {"code":"CAS","name":"Corporate Administration Services"},
+  {"code":"DRA","name":"Dr Rod Allen"},
+  {"code":"ELM","name":"Elementa Markets"},
+  {"code":"ENA","name":"Enable Advisory"},
+  {"code":"FPE","name":"Future-Plus Environmental"},
+  {"code":"HEC","name":"Hansen Environmental Consulting"},
+  {"code":"HAR","name":"Harnex"},
+  {"code":"HQP","name":"HQPlantations"},
+  {"code":"JBP","name":"JBPacific"},
+  {"code":"KLM","name":"KLM Solicitors"},
+  {"code":"LCG","name":"LCG Global"},
+  {"code":"LEP","name":"LEP Colour Printers"},
+  {"code":"LFC","name":"Life Fertility Clinic"},
+  {"code":"LFCS","name":"Life Fertility Clinic Sydney"},
+  {"code":"MER","name":"Meramist"},
+  {"code":"RIV","name":"Riverina"},
+  {"code":"SIA","name":"Somerset International Australia"},
+  {"code":"STF","name":"Stellar Fertility"}
+];
+
 // ── State ──────────────────────────────────────────────────────────────────────
 let allRows = [];
 let filteredRows = [];
-let clientData = [];
+let clientData = PERMANENT_CLIENTS.slice();
 let blockSummaryData = [];
 let activeTab = 'tickets';
 let sortCol = 'charged';
@@ -499,13 +518,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   try {
-    const cd = store.get('bh_clientData');
-    if (cd) { clientData = JSON.parse(cd); updateClientDbStatus(); }
-  } catch(e) {
-    store.del('bh_clientData');
-  }
-
-  try {
     const mh = store.get('bh_monthlyHistory');
     if (mh) monthlyHistory = JSON.parse(mh);
   } catch(e) {
@@ -554,43 +566,6 @@ function handleFileSelect(e) {
 }
 
 // ── Client database ────────────────────────────────────────────────────────────
-function handleClientFile(e) {
-  if (e.target.files[0]) importClientList(e.target.files[0]);
-  e.target.value = '';
-}
-
-function importClientList(file) {
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const raw = XLSX.utils.sheet_to_json(ws, { defval: null });
-      clientData = raw.map(row => ({
-        code:     String(row['Code'] || '').trim(),
-        name:     String(row['Name'] || '').trim(),
-        team:     String(row['Client Team'] || '').trim(),
-        sdaas:    String(row['SdaaS'] || 'No').trim(),
-        blockHours: parseFloat(row['Block Hours']) || 0,
-        clientLead: String(row['Client Lead'] || '').trim(),
-        active:   String(row['Active'] || '').trim()
-      })).filter(r => r.code && r.code !== ' ');
-      store.set('bh_clientData', JSON.stringify(clientData));
-      updateClientDbStatus();
-      applyFilters();
-    } catch(ex) { alert('Error reading client list: ' + ex.message); }
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-function updateClientDbStatus() {
-  const el = document.getElementById('clientDbStatus');
-  if (!el) return;
-  el.textContent = clientData.length
-    ? `✓ ${clientData.length} clients loaded`
-    : '';
-  el.style.color = clientData.length ? '#16a34a' : '#64748b';
-}
 
 function getClientCode(raw) {
   const m = String(raw).match(/^(.+?)([A-Z0-9]{2,6})$/);
@@ -607,32 +582,22 @@ function matchClient(rawClientStr) {
 function renderClientInfo(rows) {
   const card = document.getElementById('clientInfoCard');
   const clients = [...new Set(rows.map(r => r.client))].filter(Boolean);
-  const hasClientData    = clientData.length > 0;
-  const hasBlockSummary  = blockSummaryData.length > 0;
-  if (clients.length !== 1 || (!hasClientData && !hasBlockSummary)) { card.style.display = 'none'; return; }
+  if (clients.length !== 1) { card.style.display = 'none'; return; }
 
-  const code       = getClientCode(clients[0]);
-  const match      = clientData.find(c => c.code === code) || null;
-  const bsMatch    = blockSummaryData.find(c => c.code === code) || null;
-  if (!match && !bsMatch) { card.style.display = 'none'; return; }
+  const code    = getClientCode(clients[0]);
+  const clMatch = clientData.find(c => c.code === code) || null;
+  const bsMatch = blockSummaryData.find(c => c.code === code) || null;
+  if (!clMatch && !bsMatch) { card.style.display = 'none'; return; }
 
   card.style.display = 'flex';
-  document.getElementById('ciCode').textContent  = code;
-  document.getElementById('ciLead').textContent  = match?.clientLead || '—';
-  document.getElementById('ciTeam').textContent  = (match?.team || '').replace('Commercial Team - ', '') || '—';
-  document.getElementById('ciBalance').textContent = fmt(bsMatch?.currentBalance ?? match?.blockHours ?? 0) + ' hrs';
+  document.getElementById('ciCode').textContent    = code;
+  document.getElementById('ciSdaas').textContent   = bsMatch?.status || '—';
+  document.getElementById('ciLead').textContent    = bsMatch ? fmt(bsMatch.pendingJobs) + ' hrs' : '—';
+  document.getElementById('ciTeam').textContent    = bsMatch ? fmt(bsMatch.defaultReInvoice) + ' hrs' : '—';
+  document.getElementById('ciBalance').textContent = fmt(bsMatch?.currentBalance ?? 0) + ' hrs';
 
-  const sdaasEl = document.getElementById('ciSdaas');
-  const s = match?.sdaas || 'No';
-  if (s === 'No') {
-    sdaasEl.innerHTML = '<span style="color:#64748b">No</span>';
-  } else {
-    const cls = s === 'SdaaS+' ? 'sdaas-badge plus' : 'sdaas-badge';
-    sdaasEl.innerHTML = `<span class="${cls}">${esc(s)}</span>`;
-  }
-
-  const pendingItem    = document.getElementById('ciPendingItem');
-  const predictedItem  = document.getElementById('ciPredictedItem');
+  const pendingItem   = document.getElementById('ciPendingItem');
+  const predictedItem = document.getElementById('ciPredictedItem');
   if (bsMatch) {
     pendingItem.style.display   = 'flex';
     predictedItem.style.display = 'flex';
@@ -648,9 +613,10 @@ function useSystemBalance() {
   const rows = filteredRows.length ? filteredRows : allRows;
   const clients = [...new Set(rows.map(r => r.client))].filter(Boolean);
   if (clients.length !== 1) return;
-  const match = matchClient(clients[0]);
+  const code  = getClientCode(clients[0]);
+  const match = blockSummaryData.find(c => c.code === code);
   if (!match) return;
-  document.getElementById('hoursInput').value = match.blockHours;
+  document.getElementById('hoursInput').value = match.currentBalance;
   saveSettings();
   render();
 }
@@ -677,16 +643,26 @@ function importBlockSummary(file) {
   reader.onload = e => {
     try {
       const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      // Find the header row (look for 'Client' in column A)
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const raw = XLSX.utils.sheet_to_json(ws, { defval: null });
+      const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+      let headerRow = 0;
+      for (let r = range.s.r; r <= Math.min(range.e.r, 10); r++) {
+        const cell = ws[XLSX.utils.encode_cell({r, c: 0})];
+        if (cell && String(cell.v).trim() === 'Client') { headerRow = r; break; }
+      }
+      const raw = XLSX.utils.sheet_to_json(ws, { defval: null, range: headerRow });
       blockSummaryData = raw.map(row => ({
-        code:            String(row['Code'] || '').trim(),
-        name:            String(row['Name'] || '').trim(),
-        pendingInvoice:  row['Pending Block Invoice'] !== null ? parseFloat(row['Pending Block Invoice']) : null,
-        currentBalance:  parseFloat(row['Current Balance']) || 0,
-        predictedBalance: parseFloat(row['Predicted Balance']) || 0,
-        lockedDate:      row['Locked Date'] || null
-      })).filter(r => r.code && r.code !== ' ');
+        code:             String(row['Code'] || '').trim(),
+        name:             String(row['Client'] || '').trim(),
+        currentBalance:   row['Current Balance'] !== null ? parseFloat(row['Current Balance']) || 0 : 0,
+        pendingJobs:      row['Pending Jobs'] !== null ? parseFloat(row['Pending Jobs']) || 0 : 0,
+        pendingInvoice:   row['Pending Invoice'] !== null ? parseFloat(row['Pending Invoice']) : null,
+        defaultReInvoice: row['Default Re-Invoice'] !== null ? parseFloat(row['Default Re-Invoice']) || 0 : 0,
+        reInvoiceThreshold: row['Re-Invoice Threshold'] !== null ? parseFloat(row['Re-Invoice Threshold']) || 0 : 0,
+        predictedBalance: row['Predicted Balance'] !== null ? parseFloat(row['Predicted Balance']) || 0 : 0,
+        status:           String(row['Status'] || '').trim()
+      })).filter(r => r.code && r.code !== ' ' && r.name && r.name !== 'TOTALS');
       store.set('bh_blockSummary', JSON.stringify(blockSummaryData));
       updateBlockSummaryStatus();
       applyFilters();
@@ -698,8 +674,13 @@ function importBlockSummary(file) {
 function updateBlockSummaryStatus() {
   const el = document.getElementById('blockSummaryStatus');
   if (!el) return;
-  el.textContent = blockSummaryData.length ? `✓ ${blockSummaryData.length} clients loaded` : '';
-  el.style.color = blockSummaryData.length ? '#16a34a' : '#64748b';
+  if (blockSummaryData.length) {
+    el.textContent = `✓ ${blockSummaryData.length} clients loaded`;
+    el.style.color = '#16a34a';
+    el.style.display = 'block';
+  } else {
+    el.style.display = 'none';
+  }
 }
 
 // ── File processing ────────────────────────────────────────────────────────────
@@ -882,7 +863,7 @@ function autoPopulateClientFields(rows) {
   const bsMatch = blockSummaryData.find(c => c.code === code) || null;
   const clMatch = clientData.find(c => c.code === code) || null;
 
-  const balanceVal = bsMatch !== null ? bsMatch.currentBalance : (clMatch !== null ? clMatch.blockHours : 0);
+  const balanceVal = bsMatch !== null ? bsMatch.currentBalance : 0;
   document.getElementById('hoursInput').value = balanceVal;
   saveSettings();
 
