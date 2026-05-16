@@ -15,7 +15,6 @@ def ensure(pkg, import_as=None):
 
 ensure('playwright')
 ensure('beautifulsoup4', 'bs4')
-ensure('openpyxl')
 
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
@@ -183,77 +182,8 @@ def jobs_url_for_current_month():
         ('JobSearch[job_tech_public_comment]',''),
         ('JobSearch[teams]',                  ''),
         ('JobSearch[status_list]',            ''),
-        ('_tog14194673',                      'all'),
     ]
     return f'{BASE}/adonis/job/index?' + urlencode(params)
-
-def parse_jobs_table(html):
-    import openpyxl
-    soup = BeautifulSoup(html, 'html.parser')
-
-    # Try thead first, then fall back to any tr with th cells, then first tr with td cells
-    headers = []
-    header_row_idx = 0
-    all_rows = soup.find_all('tr')
-
-    thead = soup.find('thead')
-    if thead:
-        header_tr = thead.find('tr')
-        if header_tr and not header_tr.find('input'):
-            cells = header_tr.find_all(['th', 'td'])
-            headers = [c.get_text(strip=True) for c in cells]
-            header_row_idx = all_rows.index(header_tr)
-
-    if not headers:
-        for i, row in enumerate(all_rows):
-            if row.find('input'):
-                continue
-            cells = row.find_all('th')
-            if cells:
-                headers = [c.get_text(strip=True) for c in cells]
-                header_row_idx = i
-                break
-
-    if not headers:
-        for i, row in enumerate(all_rows):
-            if row.find('input'):
-                continue
-            cells = row.find_all('td')
-            if cells:
-                headers = [c.get_text(strip=True) for c in cells]
-                header_row_idx = i
-                break
-
-    if not headers:
-        sample = [r.get_text(' ', strip=True)[:80] for r in all_rows[:5]]
-        return None, f'Could not find header row. First rows: {sample}'
-
-    # Data rows after the header — td rows without inputs
-    rows = []
-    for row in all_rows[header_row_idx + 1:]:
-        if row.find('input'):
-            continue
-        cells = row.find_all('td')
-        if not cells:
-            continue
-        texts = [c.get_text(strip=True) for c in cells]
-        if len(texts) == len(headers):
-            rows.append(texts)
-
-    if not rows:
-        return None, 'No data rows found in jobs table'
-
-    # Build XLSX
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.append(headers)
-    for row in rows:
-        ws.append(row)
-
-    today = date.today()
-    tmp_path = os.path.join(tempfile.gettempdir(), f'jobs_{today.strftime("%Y-%m")}.xlsx')
-    wb.save(tmp_path)
-    return tmp_path, None
 
 
 def scrape_jobs():
@@ -268,18 +198,27 @@ def scrape_jobs():
             )
             try:
                 page = ctx.new_page()
-                page.goto(jobs_url, timeout=180000, wait_until='load')
+                page.goto(jobs_url, timeout=90000, wait_until='domcontentloaded')
 
                 if 'microsoftonline.com' in page.url or 'my-stats' in page.url or 'login' in page.url:
                     try:
                         page.wait_for_url(f'{BASE}/**', timeout=180000)
                     except Exception:
                         return {'error': 'Login timed out — please log in to the Edge window that opened and try again.'}
-                    page.goto(jobs_url, timeout=180000, wait_until='load')
+                    page.goto(jobs_url, timeout=90000, wait_until='domcontentloaded')
 
-                page.wait_for_selector('table tr td', timeout=120000)
+                page.wait_for_selector('table tr td', timeout=90000)
 
-                html = page.content()
+                # Trigger the Excel 2007+ export via JS click (bypasses dropdown visibility)
+                page.wait_for_selector('[id$="-xlsx"]', state='attached', timeout=30000)
+
+                with page.expect_download(timeout=120000) as dl:
+                    page.evaluate("document.querySelector('[id$=\"-xlsx\"]').click()")
+                download = dl.value
+
+                tmp_path = os.path.join(tempfile.gettempdir(), download.suggested_filename)
+                download.save_as(tmp_path)
+                filename = download.suggested_filename
 
             finally:
                 ctx.close()
@@ -290,12 +229,6 @@ def scrape_jobs():
             return {'error': 'AdonisProfile is already in use. Close any other Adonis refresh windows and try again.'}
         return {'error': f'Browser error: {msg}'}
 
-    tmp_path, err = parse_jobs_table(html)
-    if err:
-        return {'error': err}
-
-    today = date.today()
-    filename = f'jobs_{today.strftime("%Y-%m")}.xlsx'
     with open(tmp_path, 'rb') as f:
         encoded = base64.b64encode(f.read()).decode('utf-8')
     os.unlink(tmp_path)
