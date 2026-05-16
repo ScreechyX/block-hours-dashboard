@@ -16,7 +16,9 @@ import requests
 import browser_cookie3
 from bs4 import BeautifulSoup
 
-URL = 'https://adonis.atlanticdigital.com.au/adonis/client/index'
+BASE        = 'https://adonis.atlanticdigital.com.au'
+START_URL   = f'{BASE}/adonis/site/my-stats'
+CLIENT_URL  = f'{BASE}/adonis/client/index'
 
 def get_session():
     for loader in (browser_cookie3.edge, browser_cookie3.chrome):
@@ -28,9 +30,63 @@ def get_session():
             continue
     return None
 
+def check_session(session):
+    """Hit my-stats first; return error string if session is expired."""
+    try:
+        r = session.get(START_URL, timeout=15)
+    except Exception as e:
+        return f'Request failed: {e}'
+    if r.status_code != 200:
+        return f'Adonis returned HTTP {r.status_code}'
+    if r.url.rstrip('/') != START_URL.rstrip('/'):
+        return 'Session expired — please log in to Adonis in your browser and try again.'
+    return None
+
+def find_team_filter(soup):
+    """
+    Look for a search form with a client-team select/input and return
+    (field_name, option_value) for 'Commercial Team - Elliot', or None.
+    """
+    for select in soup.find_all('select'):
+        for opt in select.find_all('option'):
+            if 'elliot' in opt.get_text(strip=True).lower():
+                return select.get('name'), opt.get('value', opt.get_text(strip=True))
+    # Also check text inputs whose name hints at team
+    for inp in soup.find_all('input'):
+        name = inp.get('name', '')
+        if 'team' in name.lower() or 'client_team' in name.lower():
+            return name, 'Commercial Team - Elliot'
+    return None, None
+
+def fetch_client_page(session):
+    """
+    Navigate to the client list and apply the Commercial Team - Elliot filter.
+    Returns (response, error).
+    """
+    # First load the unfiltered page to find the filter form
+    try:
+        r = session.get(CLIENT_URL, timeout=15)
+    except Exception as e:
+        return None, f'Request failed loading client list: {e}'
+
+    if r.status_code != 200:
+        return None, f'Adonis returned HTTP {r.status_code} on client list'
+
+    # If we got redirected away, session check should have caught it already
+    soup = BeautifulSoup(r.text, 'html.parser')
+
+    field_name, field_value = find_team_filter(soup)
+    if field_name and field_value:
+        # Resubmit with the filter applied
+        try:
+            r = session.get(CLIENT_URL, params={field_name: field_value}, timeout=15)
+        except Exception as e:
+            return None, f'Request failed applying filter: {e}'
+
+    return r, None
+
 def parse(html):
     soup = BeautifulSoup(html, 'html.parser')
-    # Find the header row containing Code / Name / Client Team
     headers = None
     all_rows = soup.find_all('tr')
     for row in all_rows:
@@ -40,7 +96,14 @@ def parse(html):
             headers = texts
             break
     if not headers:
-        return None, 'Could not find table header row'
+        found = []
+        for row in all_rows[:5]:
+            cells = row.find_all(['th', 'td'])
+            texts = [c.get_text(strip=True) for c in cells if c.get_text(strip=True)]
+            if texts:
+                found.append(texts)
+        hint = f' (rows found: {found})' if found else ' (no table rows — page may require login)'
+        return None, 'Could not find table header row' + hint
 
     idx = {h: i for i, h in enumerate(headers)}
     required = ['Code', 'Name', 'Client Team', 'Block Hour', 'Block Hours', 'SdaaS']
@@ -84,17 +147,17 @@ def parse(html):
 def main():
     session = get_session()
     if not session:
-        print(json.dumps({'error': 'Could not load browser session. Make sure Edge or Chrome is open and you are logged into Adonis.'}))
+        print(json.dumps({'error': 'Could not load browser session. Make sure Edge or Chrome is open and logged into Adonis.'}))
         return
 
-    try:
-        resp = session.get(URL, timeout=15)
-    except Exception as e:
-        print(json.dumps({'error': f'Request failed: {e}'}))
+    err = check_session(session)
+    if err:
+        print(json.dumps({'error': err}))
         return
 
-    if resp.status_code != 200:
-        print(json.dumps({'error': f'Adonis returned HTTP {resp.status_code}. You may need to log in first.'}))
+    resp, err = fetch_client_page(session)
+    if err:
+        print(json.dumps({'error': err}))
         return
 
     clients, err = parse(resp.text)
