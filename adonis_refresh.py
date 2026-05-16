@@ -173,8 +173,17 @@ def jobs_url_for_current_month():
     last  = today.replace(day=calendar.monthrange(today.year, today.month)[1]).strftime('%d/%m/%Y')
     from urllib.parse import urlencode
     params = [
-        ('JobSearch[job_date]', f'{first} - {last}'),
-        ('JobSearch[charge_type_list][]', 'block'),
+        ('JobSearch[tech_list]',              ''),
+        ('JobSearch[job_date]',               f'{first} - {last}'),
+        ('JobSearch[clients_list]',           ''),
+        ('JobSearch[charge_type_list][0]',    'block'),
+        ('JobSearch[helpdesk_ticket]',        ''),
+        ('JobSearch[worked_bh]',              ''),
+        ('JobSearch[charged_bh]',             ''),
+        ('JobSearch[job_tech_public_comment]',''),
+        ('JobSearch[teams]',                  ''),
+        ('JobSearch[status_list]',            ''),
+        ('_tog14194673',                      'all'),
     ]
     return f'{BASE}/adonis/job/index?' + urlencode(params)
 
@@ -234,26 +243,16 @@ def scrape_jobs():
             )
             try:
                 page = ctx.new_page()
-                page.goto(jobs_url, timeout=90000, wait_until='domcontentloaded')
+                page.goto(jobs_url, timeout=180000, wait_until='load')
 
                 if 'microsoftonline.com' in page.url or 'my-stats' in page.url or 'login' in page.url:
                     try:
                         page.wait_for_url(f'{BASE}/**', timeout=180000)
                     except Exception:
                         return {'error': 'Login timed out — please log in to the Edge window that opened and try again.'}
-                    page.goto(jobs_url, timeout=90000, wait_until='domcontentloaded')
+                    page.goto(jobs_url, timeout=180000, wait_until='load')
 
-                page.wait_for_selector('table tr td', timeout=90000)
-
-                # Navigate to the "All" view — find the link whose href contains _tog...=all
-                all_href = page.evaluate("""() => {
-                    const a = Array.from(document.querySelectorAll('a[href]'))
-                        .find(a => /_tog[^=]+=all/.test(a.href));
-                    return a ? a.href : null;
-                }""")
-                if all_href:
-                    page.goto(all_href, timeout=180000, wait_until='load')
-                    page.wait_for_selector('table tr td', timeout=120000)
+                page.wait_for_selector('table tr td', timeout=120000)
 
                 html = page.content()
 
