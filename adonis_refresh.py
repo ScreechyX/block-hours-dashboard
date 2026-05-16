@@ -1,4 +1,4 @@
-import sys, json
+import sys, json, os
 import subprocess
 
 def ensure(pkg, import_as=None):
@@ -8,78 +8,19 @@ def ensure(pkg, import_as=None):
         subprocess.check_call([sys.executable, '-m', 'pip', 'install', pkg, '-q'],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-ensure('browser_cookie3')
-ensure('requests')
+ensure('playwright')
 ensure('beautifulsoup4', 'bs4')
 
-import requests
-import browser_cookie3
+from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 
-BASE        = 'https://adonis.atlanticdigital.com.au'
-START_URL   = f'{BASE}/adonis/site/my-stats'
-CLIENT_URL  = f'{BASE}/adonis/client/index'
+BASE       = 'https://adonis.atlanticdigital.com.au'
+CLIENT_URL = f'{BASE}/adonis/client/index'
 
-def get_session():
-    for loader in (browser_cookie3.edge, browser_cookie3.chrome):
-        try:
-            s = requests.Session()
-            cookies = loader(domain_name='atlanticdigital.com.au')
-            s.cookies.update(cookies)
-            names = [c.name for c in cookies]
-            return s, names
-        except Exception:
-            continue
-    return None, []
-
-def is_logged_out(url):
-    """Return True if the URL looks like a logged-out redirect."""
-    return 'my-stats' in url or 'login' in url or 'site/index' in url
-
-def find_team_filter(soup):
-    """
-    Look for a search form with a client-team select/input and return
-    (field_name, option_value) for 'Commercial Team - Elliot', or None.
-    """
-    for select in soup.find_all('select'):
-        for opt in select.find_all('option'):
-            if 'elliot' in opt.get_text(strip=True).lower():
-                return select.get('name'), opt.get('value', opt.get_text(strip=True))
-    # Also check text inputs whose name hints at team
-    for inp in soup.find_all('input'):
-        name = inp.get('name', '')
-        if 'team' in name.lower() or 'client_team' in name.lower():
-            return name, 'Commercial Team - Elliot'
-    return None, None
-
-def fetch_client_page(session):
-    """
-    Navigate to the client list and apply the Commercial Team - Elliot filter.
-    Returns (response, error).
-    """
-    # First load the unfiltered page to find the filter form
-    try:
-        r = session.get(CLIENT_URL, timeout=60)
-    except Exception as e:
-        return None, f'Request failed loading client list: {e}'
-
-    if r.status_code != 200:
-        return None, f'Adonis returned HTTP {r.status_code} on client list'
-
-    if is_logged_out(r.url):
-        return None, f'Session expired — please log in to Adonis in your browser and try again. (redirected to: {r.url})'
-
-    soup = BeautifulSoup(r.text, 'html.parser')
-
-    field_name, field_value = find_team_filter(soup)
-    if field_name and field_value:
-        # Resubmit with the filter applied
-        try:
-            r = session.get(CLIENT_URL, params={field_name: field_value}, timeout=60)
-        except Exception as e:
-            return None, f'Request failed applying filter: {e}'
-
-    return r, None
+EDGE_PROFILE = os.path.join(
+    os.environ.get('LOCALAPPDATA', ''),
+    'Microsoft', 'Edge', 'User Data'
+)
 
 def parse(html):
     soup = BeautifulSoup(html, 'html.parser')
@@ -98,7 +39,7 @@ def parse(html):
             texts = [c.get_text(strip=True) for c in cells if c.get_text(strip=True)]
             if texts:
                 found.append(texts)
-        hint = f' (rows found: {found})' if found else ' (no table rows — page may require login)'
+        hint = f' (rows found: {found})' if found else ' (no table rows found)'
         return None, 'Could not find table header row' + hint
 
     idx = {h: i for i, h in enumerate(headers)}
@@ -140,22 +81,47 @@ def parse(html):
         })
     return clients, None
 
+
 def main():
-    session, cookie_names = get_session()
-    if not session:
-        print(json.dumps({'error': 'Could not load browser session. Make sure Edge or Chrome is open and logged into Adonis.'}))
+    try:
+        with sync_playwright() as p:
+            ctx = p.chromium.launch_persistent_context(
+                user_data_dir=EDGE_PROFILE,
+                channel='msedge',
+                headless=False,
+                args=['--no-first-run', '--no-default-browser-check']
+            )
+            try:
+                page = ctx.new_page()
+                page.goto(CLIENT_URL, timeout=90000, wait_until='domcontentloaded')
+
+                if 'microsoftonline.com' in page.url:
+                    print(json.dumps({'error': 'Session expired — please log in to Adonis in Edge and try again.'}))
+                    return
+                if 'my-stats' in page.url or 'login' in page.url:
+                    print(json.dumps({'error': f'Session expired — redirected to {page.url}'}))
+                    return
+
+                # Wait for the client table to fully render
+                page.wait_for_selector('table tr td', timeout=90000)
+                content = page.content()
+            finally:
+                ctx.close()
+
+    except Exception as e:
+        msg = str(e)
+        if 'user data directory is already in use' in msg.lower():
+            print(json.dumps({'error': 'Edge is already open with this profile. Close Edge and try again, or leave Edge open and try — it may work automatically.'}))
+        else:
+            print(json.dumps({'error': f'Browser error: {msg}'}))
         return
 
-    resp, err = fetch_client_page(session)
-    if err:
-        print(json.dumps({'error': err + f' | cookies loaded: {cookie_names}'}))
-        return
-
-    clients, err = parse(resp.text)
+    clients, err = parse(content)
     if err:
         print(json.dumps({'error': err}))
         return
 
     print(json.dumps({'clients': clients, 'count': len(clients)}))
+
 
 main()
