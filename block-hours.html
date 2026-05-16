@@ -639,6 +639,16 @@ function useSystemPending() {
   render();
 }
 
+async function pingAdonisServer() {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), 1000);
+  try {
+    await fetch('http://localhost:3001/ping', { signal: ctrl.signal });
+    clearTimeout(id);
+    return true;
+  } catch(e) { clearTimeout(id); return false; }
+}
+
 async function refreshFromAdonis() {
   const btn    = document.getElementById('btnAdonisRefresh');
   const status = document.getElementById('adonisRefreshStatus');
@@ -648,6 +658,23 @@ async function refreshFromAdonis() {
   status.style.color = '#64748b';
 
   try {
+    // Auto-start server if not running
+    if (!await pingAdonisServer()) {
+      status.textContent = 'Starting server… (click Open if prompted)';
+      window.open('adonis-refresh://', '_self');
+      let started = false;
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 1000));
+        if (await pingAdonisServer()) { started = true; break; }
+      }
+      if (!started) {
+        status.textContent = '✗ Could not start server. Run setup-adonis.ps1 first, then try again.';
+        status.style.color = '#dc2626';
+        return;
+      }
+    }
+
+    status.textContent = 'Loading client list…';
     const resp = await fetch('http://localhost:3001/refresh');
     const data = await resp.json();
 

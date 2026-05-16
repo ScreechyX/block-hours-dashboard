@@ -129,7 +129,14 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        if self.path == '/refresh':
+        if self.path == '/ping':
+            body = b'{"ok":true}'
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self._cors()
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path == '/refresh':
             result = scrape()
             body = json.dumps(result).encode()
             self.send_response(200)
@@ -150,7 +157,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    server = HTTPServer(('localhost', PORT), Handler)
+    try:
+        server = HTTPServer(('localhost', PORT), Handler)
+    except OSError:
+        # Port already in use — another instance is already running, exit silently
+        sys.exit(0)
     print(f'Adonis refresh server running on http://localhost:{PORT}/refresh')
     print('Leave this window open. You can now use the dashboard from anywhere.')
     server.serve_forever()
