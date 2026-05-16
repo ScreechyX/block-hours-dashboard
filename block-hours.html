@@ -883,6 +883,7 @@ function parseRows(raw) {
     const desc = String(colVal(row, 'description ', 'description', 'notes') || '');
     const summMatch = desc.match(/Summary:\s*([^\n\\]+)/);
     const summary   = summMatch ? summMatch[1].trim() : (desc.replace(/\\n/g,' ').substring(0, 100) + (desc.length > 100 ? '…' : ''));
+    const senior    = desc.includes('* Senior/Specialist Support');
 
     const client = String(colVal(row, 'client') || '').trim();
     const chargeType = String(colVal(row, 'charge type', 'chargetype', 'type') || '').trim();
@@ -900,6 +901,7 @@ function parseRows(raw) {
       worked,
       charged,
       summary,
+      senior,
       team: String(colVal(row, 'staff team', 'team') || '').trim()
     };
   }).filter(Boolean);
@@ -1481,7 +1483,7 @@ function renderEntriesTable(rows, container, countEl) {
             <td style="white-space:nowrap;font-size:12px;color:#64748b">${esc(r.dateStr.split(' ')[0] || r.dateStr)}</td>
             <td><span class="staff-chip">${esc(r.staff)}</span></td>
             <td>${r.tickets.length ? r.tickets.map(t => `<span class="ticket-pill">#${t}</span>`).join('') : '<span class="ticket-pill none">—</span>'}</td>
-            <td style="max-width:300px;font-size:12px;color:#475569">${esc(r.summary)}</td>
+            <td style="max-width:300px;font-size:12px;color:#475569">${r.senior ? '<span style="display:inline-block;margin-right:4px;padding:1px 5px;border-radius:4px;font-size:10px;font-weight:600;background:#fef3c7;color:#92400e;border:1px solid #fcd34d">Senior</span>' : ''}${esc(r.summary)}</td>
             <td><span class="charge-type ${r.chargeType.toLowerCase().includes('sdaas') ? 'sdaas' : 'block'}">${esc(r.chargeType)}</span></td>
             <td>
               <div class="hours-bar">
