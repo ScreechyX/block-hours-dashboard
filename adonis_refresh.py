@@ -96,13 +96,16 @@ def main():
                 page = ctx.new_page()
                 page.goto(CLIENT_URL, timeout=90000, wait_until='domcontentloaded')
 
-                # If redirected to SSO or my-stats, wait for the user to log in (up to 3 min)
+                # If redirected to SSO, wait for the user to log in then navigate to client list
                 if 'microsoftonline.com' in page.url or 'my-stats' in page.url or 'login' in page.url:
                     try:
-                        page.wait_for_url(f'{BASE}/adonis/client/**', timeout=180000)
+                        # Wait until we're back on any Adonis page (login complete)
+                        page.wait_for_url(f'{BASE}/**', timeout=180000)
                     except Exception:
                         print(json.dumps({'error': 'Login timed out — please log in to the Edge window that opened and try again.'}))
                         return
+                    # Now navigate to the client list
+                    page.goto(CLIENT_URL, timeout=90000, wait_until='domcontentloaded')
 
                 # Wait for the client table to fully render
                 page.wait_for_selector('table tr td', timeout=90000)
