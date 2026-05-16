@@ -262,7 +262,7 @@ class Handler(BaseHTTPRequestHandler):
             self._cors()
             self.end_headers()
             self.wfile.write(body)
-            threading.Thread(target=self.server.shutdown, daemon=True).start()
+            threading.Thread(target=self._exit, daemon=True).start()
         elif self.path == '/refresh':
             result = scrape()
             body = json.dumps(result).encode()
@@ -271,10 +271,15 @@ class Handler(BaseHTTPRequestHandler):
             self._cors()
             self.end_headers()
             self.wfile.write(body)
-            threading.Thread(target=self.server.shutdown, daemon=True).start()
+            threading.Thread(target=self._exit, daemon=True).start()
         else:
             self.send_response(404)
             self.end_headers()
+
+    def _exit(self):
+        import time
+        time.sleep(0.3)
+        os._exit(0)
 
     def _cors(self):
         self.send_header('Access-Control-Allow-Origin', '*')
