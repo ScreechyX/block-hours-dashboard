@@ -252,8 +252,8 @@ def scrape_jobs():
                     return a ? a.href : null;
                 }""")
                 if all_href:
-                    page.goto(all_href, timeout=90000, wait_until='domcontentloaded')
-                    page.wait_for_selector('table tr td', timeout=60000)
+                    page.goto(all_href, timeout=180000, wait_until='load')
+                    page.wait_for_selector('table tr td', timeout=120000)
 
                 html = page.content()
 
