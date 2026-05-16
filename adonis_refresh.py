@@ -166,20 +166,13 @@ def scrape():
     return {'clients': clients, 'count': len(clients)}
 
 
-def jobs_url_for_current_month():
+JOBS_BASE_URL = f'{BASE}/adonis/job/index?JobSearch%5Bjob_tech_charge_type%5D=block'
+
+def scrape_jobs():
     today = date.today()
     first = today.replace(day=1).strftime('%d/%m/%Y')
     last  = today.replace(day=calendar.monthrange(today.year, today.month)[1]).strftime('%d/%m/%Y')
-    from urllib.parse import urlencode
-    params = {
-        'JobSearch[job_tech_charge_type]': 'block',
-        'JobSearch[date_from]': first,
-        'JobSearch[date_to]':   last,
-    }
-    return f'{BASE}/adonis/job/index?' + urlencode(params)
 
-def scrape_jobs():
-    jobs_url = jobs_url_for_current_month()
     try:
         with sync_playwright() as p:
             ctx = p.chromium.launch_persistent_context(
@@ -190,34 +183,40 @@ def scrape_jobs():
             )
             try:
                 page = ctx.new_page()
-                page.goto(jobs_url, timeout=90000, wait_until='domcontentloaded')
+                page.goto(JOBS_BASE_URL, timeout=90000, wait_until='domcontentloaded')
 
                 if 'microsoftonline.com' in page.url or 'my-stats' in page.url or 'login' in page.url:
                     try:
                         page.wait_for_url(f'{BASE}/**', timeout=180000)
                     except Exception:
                         return {'error': 'Login timed out — please log in to the Edge window that opened and try again.'}
-                    page.goto(jobs_url, timeout=90000, wait_until='domcontentloaded')
+                    page.goto(JOBS_BASE_URL, timeout=90000, wait_until='domcontentloaded')
 
                 page.wait_for_selector('table tr td', timeout=90000)
 
-                # If the URL date params weren't picked up, try filling the filter inputs directly
-                today = date.today()
-                first = today.replace(day=1).strftime('%d/%m/%Y')
-                last  = today.replace(day=calendar.monthrange(today.year, today.month)[1]).strftime('%d/%m/%Y')
-                filled = False
-                for from_sel, to_sel in [
-                    ('input[name="JobSearch[date_from]"]', 'input[name="JobSearch[date_to]"]'),
-                    ('input[name="JobSearch[from_date]"]', 'input[name="JobSearch[to_date]"]'),
-                    ('input[name="JobSearch[start_date]"]', 'input[name="JobSearch[end_date]"]'),
-                ]:
-                    if page.query_selector(from_sel) and page.query_selector(to_sel):
-                        page.fill(from_sel, first)
-                        page.fill(to_sel, last)
-                        page.keyboard.press('Enter')
-                        page.wait_for_selector('table tr td', timeout=30000)
-                        filled = True
-                        break
+                # Discover date filter inputs by inspecting what's actually on the page
+                date_input_names = page.evaluate("""() => {
+                    return Array.from(document.querySelectorAll('input'))
+                        .filter(i => i.name && i.name.toLowerCase().includes('date'))
+                        .map(i => i.name);
+                }""")
+
+                if len(date_input_names) >= 2:
+                    page.fill(f'input[name="{date_input_names[0]}"]', first)
+                    page.fill(f'input[name="{date_input_names[1]}"]', last)
+                    page.keyboard.press('Enter')
+                    page.wait_for_selector('table tr td', timeout=30000)
+                elif len(date_input_names) == 1:
+                    page.fill(f'input[name="{date_input_names[0]}"]', first)
+                    page.keyboard.press('Enter')
+                    page.wait_for_selector('table tr td', timeout=30000)
+                else:
+                    # No date inputs found — include field names in result for debugging
+                    all_inputs = page.evaluate("""() => {
+                        return Array.from(document.querySelectorAll('input[name]'))
+                            .map(i => i.name);
+                    }""")
+                    return {'error': f'No date filter inputs found. Available inputs: {all_inputs}'}
 
                 # Open Export Formats dropdown — try common button text variants
                 export_btn = None
