@@ -1,6 +1,7 @@
 import sys, json, os, re, base64, tempfile
 import subprocess
 import calendar
+import threading
 from datetime import date
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -261,6 +262,7 @@ class Handler(BaseHTTPRequestHandler):
             self._cors()
             self.end_headers()
             self.wfile.write(body)
+            threading.Thread(target=self.server.shutdown, daemon=True).start()
         elif self.path == '/refresh':
             result = scrape()
             body = json.dumps(result).encode()
@@ -269,6 +271,7 @@ class Handler(BaseHTTPRequestHandler):
             self._cors()
             self.end_headers()
             self.wfile.write(body)
+            threading.Thread(target=self.server.shutdown, daemon=True).start()
         else:
             self.send_response(404)
             self.end_headers()
