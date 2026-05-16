@@ -30,17 +30,9 @@ def get_session():
             continue
     return None
 
-def check_session(session):
-    """Hit my-stats first; return error string if session is expired."""
-    try:
-        r = session.get(START_URL, timeout=60)
-    except Exception as e:
-        return f'Request failed: {e}'
-    if r.status_code != 200:
-        return f'Adonis returned HTTP {r.status_code}'
-    if r.url.rstrip('/') != START_URL.rstrip('/'):
-        return 'Session expired — please log in to Adonis in your browser and try again.'
-    return None
+def is_logged_out(url):
+    """Return True if the URL looks like a logged-out redirect."""
+    return 'my-stats' in url or 'login' in url or 'site/index' in url
 
 def find_team_filter(soup):
     """
@@ -72,7 +64,9 @@ def fetch_client_page(session):
     if r.status_code != 200:
         return None, f'Adonis returned HTTP {r.status_code} on client list'
 
-    # If we got redirected away, session check should have caught it already
+    if is_logged_out(r.url):
+        return None, 'Session expired — please log in to Adonis in your browser and try again.'
+
     soup = BeautifulSoup(r.text, 'html.parser')
 
     field_name, field_value = find_team_filter(soup)
@@ -148,11 +142,6 @@ def main():
     session = get_session()
     if not session:
         print(json.dumps({'error': 'Could not load browser session. Make sure Edge or Chrome is open and logged into Adonis.'}))
-        return
-
-    err = check_session(session)
-    if err:
-        print(json.dumps({'error': err}))
         return
 
     resp, err = fetch_client_page(session)
