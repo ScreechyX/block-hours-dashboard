@@ -1,40 +1,41 @@
 # Block Hours Dashboard
 
-A self-contained HTML dashboard for MSP block hour tracking. Import grid export reports from your ticketing system and get instant visibility into client usage, forecasting, and billing status.
+A self-contained HTML dashboard for MSP block hour tracking. Pull live data from Adonis with one click and get instant visibility into client usage, forecasting, and billing status.
 
 Live at **[block.nightmareit.com](https://block.nightmareit.com)** (Cloudflare Access protected).
 
 ## Features
 
-- **Import grid exports** — drag and drop `.xlsx` time entry exports to load client usage data
-- **Import client list** — load your client database to auto-populate balances, SDaaS status, and client leads
-- **Import block summary** — load billing summaries to auto-populate pending invoice hours and predicted balances
+- **Job Import** — scrapes Adonis jobs filtered to the current month and block charge type, exports to Excel 2007+, and imports directly into the dashboard; auto-starts the local Adonis server via URI scheme
+- **Block Summary Refresh** — scrapes each client's block-overview page in Adonis and populates balances, pending jobs, pending invoice, and predicted balance
 - **Per-client dashboard** — KPI cards, usage gauge, run-rate forecast, daily usage chart, staff breakdown, and job table
-- **All-clients overview** — card grid showing every client's usage progress at a glance, sorted by criticality; SDaaS and pending invoice badges shown per card
+- **All-clients overview** — card grid showing every client's usage progress at a glance, sorted by criticality; Block, SDaaS, SDaaS Secure+, and Pending badges shown per card
 - **Back button** — drill into a client from the all-clients view and return with a single click
 - **Auto-populate** — selecting a client automatically fills in the current balance and pending invoice from imported data; balance defaults to 0 when no data is available
 - **Current month auto-snap** — selecting a client or importing a file automatically snaps the period filter to the current month
-- **Monthly usage trend chart** — when viewing the current month for a single client, shows a bar chart of charged hours across all previously imported months, with a dashed average line and a linear-regression trend line
+- **Monthly usage trend chart** — bar chart of charged hours across all previously imported months, with a dashed average line and a linear-regression trend line
 - **Usage alerts** — colour-coded warnings at 50%, 75%, and 90% of block hours used
+- **Ticket links** — ticket numbers link directly to the Halo helpdesk ticket
 - **Ticket flags** — highlights tickets over 10 charged hours (red) and tickets where worked hours don't match charged hours (yellow / unbilled)
+- **Senior flag** — jobs containing `* Senior/Specialist Support` in their description are flagged with an amber **Senior** badge
 - **Run-rate forecasting** — projects end-of-month usage based on daily burn rate
 - **Import history** — the last 8 imported files are saved in the sidebar; click any entry to reload that import's data without re-importing the file
 - **Persistent settings** — block hours balance, pending invoice, monthly history, and import data are saved between sessions
 
+## Setup (Adonis integration)
+
+The Job Import and Block Summary Refresh buttons communicate with a local Python server (`adonis_refresh.py`) that drives a browser session to scrape Adonis.
+
+1. Install Python and run `pip install playwright beautifulsoup4` then `playwright install msedge`
+2. Run `setup-adonis.ps1` once to register the `adonis-refresh://` URI scheme — this allows the dashboard to auto-start the server
+3. Click **Block Summary Refresh** or **Job Import** — Edge will open, log in to Adonis via SSO if prompted, then close automatically once data is collected
+
 ## Usage
 
-1. Open `index.html` in any modern browser — no server or installation required
-2. **Optional:** Import a client list and/or block summary to enable auto-population and the all-clients overview
-3. Import a grid export `.xlsx` from your ticketing system
+1. Open the dashboard in any modern browser (or visit the live URL)
+2. Click **Block Summary Refresh** to pull client balances from Adonis
+3. Click **Job Import** to pull this month's block hour jobs from Adonis
 4. Select a client from the filter to view their detailed dashboard, or leave on **All Clients** for the overview
-
-## File Inputs
-
-| File | Purpose |
-|------|---------|
-| Grid export | Time entries — staff, dates, tickets, hours worked and charged |
-| Client list | Client database — codes, SDaaS status, client leads, block hour balances |
-| Block summary | Billing summary — pending invoice hours, current and predicted balances |
 
 ## Threshold Colours
 
