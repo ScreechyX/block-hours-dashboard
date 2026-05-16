@@ -143,7 +143,7 @@
   .client-info-card .ci-item { display: flex; flex-direction: column; gap: 2px; }
   .client-info-card .ci-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: #94a3b8; }
   .client-info-card .ci-value { font-size: 13px; font-weight: 600; color: #1e293b; }
-  .sdaas-badge { display: inline-flex; align-items: center; gap: 4px; background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
+  .sdaas-badge { display: inline-flex; align-items: center; gap: 4px; background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; border-radius: 4px; padding: 1px 7px; font-size: 11px; font-weight: 700; }
   .sdaas-badge.plus { background: #fdf4ff; color: #7e22ce; border-color: #e9d5ff; }
   .ci-balance-hint { font-size: 11px; color: #94a3b8; margin-top: 4px; }
   .btn-use-balance { font-size: 11px; color: #3b82f6; background: none; border: none; cursor: pointer; padding: 0; font-weight: 600; text-decoration: underline; }
@@ -1180,7 +1180,7 @@ function renderAllClientsView(rows) {
       ? `<span class="${sdaasPlus ? 'sdaas-badge plus' : 'sdaas-badge'}" style="font-size:10px;padding:1px 6px">${sdaasPlus ? 'SDaaS Secure +' : 'SDaaS'}</span>`
       : '';
     const pendingBadge = c.pending > 0
-      ? `<span style="display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:20px;padding:1px 7px;font-size:10px;font-weight:700">Pending Invoice</span>`
+      ? `<span style="display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700">Pending Invoice</span>`
       : '';
     const balanceStr = c.balance !== null ? `${fmt(c.total)} hrs balance` : 'No balance data';
     return `
@@ -1189,7 +1189,7 @@ function renderAllClientsView(rows) {
           <div>
             <div class="ac-client-name">${esc(c.name)}</div>
             <div class="ac-code">${esc(c.code)}</div>
-            <div style="margin-top:5px;min-height:20px;display:flex;flex-wrap:wrap;gap:4px"><span class="charge-type block">Block</span>${sdaasBadge}${pendingBadge}</div>
+            <div style="margin-top:5px;min-height:20px;display:flex;flex-wrap:wrap;align-items:center;gap:4px"><span class="charge-type block">Block</span>${sdaasBadge}${pendingBadge}</div>
           </div>
           <div class="ac-pct-label" style="color:${textColor}">${c.balance !== null ? c.pct.toFixed(0) + '%' : '—'}</div>
         </div>
