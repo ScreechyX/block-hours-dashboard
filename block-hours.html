@@ -206,7 +206,12 @@
     <!-- Client database -->
     <div class="sidebar-section">
       <h3>Client Database</h3>
-      <button class="btn-outline-full" onclick="document.getElementById('blockSummaryInput').click()">
+      <button class="btn-outline-full" id="btnAdonisRefresh" onclick="refreshFromAdonis()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        Block Summary Refresh
+      </button>
+      <div id="adonisRefreshStatus" style="margin-top:6px;font-size:11px;color:#64748b"></div>
+      <button class="btn-outline-full" style="margin-top:8px" onclick="document.getElementById('blockSummaryInput').click()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         Import Block Summary
       </button>
@@ -632,6 +637,71 @@ function useSystemPending() {
   document.getElementById('pendingInput').value = match.pendingInvoice;
   saveSettings();
   render();
+}
+
+async function refreshFromAdonis() {
+  const btn    = document.getElementById('btnAdonisRefresh');
+  const status = document.getElementById('adonisRefreshStatus');
+  btn.disabled = true;
+  btn.innerHTML = btn.innerHTML.replace('Block Summary Refresh', 'Refreshing…');
+  status.textContent = '';
+  status.style.color = '#64748b';
+
+  try {
+    const resp = await fetch('/api/adonis-refresh');
+    const data = await resp.json();
+
+    if (data.error) {
+      status.textContent = '✗ ' + data.error;
+      status.style.color = '#dc2626';
+      return;
+    }
+
+    const incoming = data.clients || [];
+
+    // Update clientData (permanent list)
+    const prevCodes = new Set(clientData.map(c => c.code));
+    const newCodes  = new Set(incoming.map(c => c.code));
+    clientData = incoming.map(c => ({ code: c.code, name: c.name }));
+
+    // Merge into blockSummaryData — update existing, add new, remove departed
+    incoming.forEach(c => {
+      const ex = blockSummaryData.find(b => b.code === c.code);
+      if (ex) {
+        ex.name           = c.name;
+        ex.currentBalance = c.currentBalance;
+        ex.status         = c.status;
+      } else {
+        blockSummaryData.push({
+          code: c.code, name: c.name,
+          currentBalance: c.currentBalance,
+          pendingJobs: 0, pendingInvoice: null,
+          defaultReInvoice: 0, reInvoiceThreshold: 0,
+          predictedBalance: c.currentBalance,
+          status: c.status
+        });
+      }
+    });
+    blockSummaryData = blockSummaryData.filter(b => newCodes.has(b.code));
+    store.set('bh_blockSummary', JSON.stringify(blockSummaryData));
+
+    const added   = [...newCodes].filter(c => !prevCodes.has(c));
+    const removed = [...prevCodes].filter(c => !newCodes.has(c));
+    let msg = `✓ ${incoming.length} clients refreshed`;
+    if (added.length)   msg += ` · +${added.join(', ')}`;
+    if (removed.length) msg += ` · removed ${removed.join(', ')}`;
+    status.textContent = msg;
+    status.style.color = '#16a34a';
+
+    rebuildFilters();
+    applyFilters();
+  } catch(e) {
+    status.textContent = '✗ Could not reach local server. Try restarting it.';
+    status.style.color = '#dc2626';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = btn.innerHTML.replace('Refreshing…', 'Block Summary Refresh');
+  }
 }
 
 function handleBlockSummaryFile(e) {
